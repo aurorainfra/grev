@@ -34,6 +34,11 @@ while TSV passes through byte for byte.
   The state is a window of `L0001| …` lines and the questions point at ids, because the model needs
   the surroundings. In an A/B on a memo, heading/body breaks scored 0.53 and 0.36 as pair-only
   questions (wrongly joined), and 0.13 and 0.05 in document form.
+- **Key order in structured questions matters.** For `trv`'s marked-occurrence questions, putting
+  the instruction first and the text last (`instruction, marked, question, text`) got 10/10 on
+  hard cases: an apostrophe inside "don't" vs. quote marks, and prose typos vs. empty CSV fields.
+  With the text first it got 9/10 and much thinner margins. Choice options work best with a
+  short description each ("replace the marked text with \"Street\"").
 - **Choice is relative and Noul is absolute.** `pickv` pairs its Choice with an existence Noul
   ("does any line answer this at all?"). `seek` offers `(none)` at every level. Otherwise a Choice
   always crowns some winner.
@@ -108,7 +113,8 @@ lock file. Parallel invocations can overshoot a cap by at most what they already
 - **Names:**
   - `grev` is grep + Jev.
   - A `v` suffix marks a semantic variant of a classic tool: `uniqv`, `cutv`, `isv`, `tagv`,
-    `pickv`, `probev`, and `lookv`, which binary-searches like look(1).
+    `pickv`, `probev`, `trv` (tr), `sortv` (sort), and `lookv`, which binary-searches like
+    look(1).
   - `is`, `tag`, `pick` and `probe` were renamed after a survey of Debian, Arch/AUR, Fedora,
     Alpine and Homebrew binaries. `is` clashes with Microsoft's inshellisense, `tag` with
     Homebrew's `tag`, `pick` with mptre/pick and nmh (Debian policy §10.1), and `probe` with

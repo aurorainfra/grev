@@ -38,6 +38,8 @@ builds:
   - { <<: *build, id: seek, main: ./cmd/seek, binary: seek }
   - { <<: *build, id: probev, main: ./cmd/probev, binary: probev }
   - { <<: *build, id: lookv, main: ./cmd/lookv, binary: lookv }
+  - { <<: *build, id: trv, main: ./cmd/trv, binary: trv }
+  - { <<: *build, id: sortv, main: ./cmd/sortv, binary: sortv }
   - { <<: *build, id: jev, main: ./cmd/jev, binary: jev }
 
 archives:
@@ -64,7 +66,7 @@ nfpms:
     description: |-
       Unix filters that ask questions instead of matching patterns.
       grev is grep where the pattern is a question, plus isv, oneof, tagv,
-      rank, pickv, uniqv, unwrap, seg, cutv, seek, probev and lookv, built on
+      rank, sortv, pickv, uniqv, unwrap, seg, cutv, seek, probev, lookv and trv, built on
       TypeSafe's Jev System One models.
     license: MIT OR Apache-2.0
     section: utils

@@ -1,0 +1,2 @@
+Our brand colour is a deep teal; the logo uses the same color in every region.
+The CSS sets color: #0b6e6e on headings.

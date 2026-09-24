@@ -77,3 +77,4 @@ The sort is stable, so ties keep input order. There's no streaming, as with `sor
 - [grev](grev.md): keep only the records that fit.
 - [pickv](pickv.md): the single best line, with an "is it here at all?" check.
 - [probev](probev.md): several scores per record, as columns.
+- [sortv](sortv.md): sort by an order described in words, via pairwise comparisons.

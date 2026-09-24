@@ -34,6 +34,7 @@ git diff --cached | isv 'adds a secret or credential' && echo 'refusing to commi
 tagv billing technical feature-request other < examples/tickets.txt
 tagv --split tickets/ billing technical other < examples/tickets.txt
 rank -s -m3 -L 'not urgent|soon|urgent|critical' 'How urgent is the ticket {}?' examples/tickets.txt
+sortv 'chronologically, earliest first' examples/sortv-events.txt
 
 # Find, cut, dedupe, reflow
 man tar | pickv 'how do I list the contents of an archive?'
@@ -45,6 +46,10 @@ seek --verify 'the spend ledger' .
 # Bisect by meaning: the first health check that reports a failure (3 requests for 600 lines)
 lookv -n --about 'health checks, one per minute' 'reports a failing dependency' examples/lookv-health.log
 
+# Edit by meaning: quote marks but not apostrophes; St. → Saint or Street by context
+trv "'" '"' 'is used as a quotation mark, not an apostrophe' < examples/trv-story.txt
+trv -e '\bSt\.' -o 'Saint|Street' 'what St. abbreviates here' < examples/trv-addresses.txt
+
 # Probabilities as columns, for awk
 probev -H -q 'refund: asks for money back' -q 'angry: the writer is angry' < examples/tickets.txt
 ```
@@ -55,6 +60,7 @@ probev -H -q 'refund: asks for money back' -q 'angry: the writer is angry' < exa
 | [`isv`](docs/tools/isv.md) | test | answer a yes/no question about the whole input with the exit status |
 | [`oneof`](docs/tools/oneof.md) | case | print which label fits the whole input |
 | [`tagv`](docs/tools/tagv.md) | awk | label every record; `--split DIR` routes records into files |
+| [`sortv`](docs/tools/sortv.md) | sort | sort in an order described in words, by pairwise comparison |
 | [`rank`](docs/tools/rank.md) | sort | sort records by how well they fit, or by ordered levels |
 | [`pickv`](docs/tools/pickv.md) | grep -o | the one line or regex match that best answers a question |
 | [`uniqv`](docs/tools/uniqv.md) | uniq | collapse adjacent records that mean the same thing |
@@ -62,6 +68,7 @@ probev -H -q 'refund: asks for money back' -q 'angry: the writer is angry' < exa
 | [`seg`](docs/tools/seg.md) | csplit | split a stream into topic segments |
 | [`cutv`](docs/tools/cutv.md) | cut | cut the CSV/TSV columns that match a description |
 | [`seek`](docs/tools/seek.md) | find | walk a directory tree to what a description names |
+| [`trv`](docs/tools/trv.md) | tr, sed | translate, delete, squeeze or replace only where an instruction applies |
 | [`lookv`](docs/tools/lookv.md) | look, git bisect | find where an ordered input's answer flips, in a few rounds |
 | [`probev`](docs/tools/probev.md) | awk | print per-record probability columns |
 | [`jev`](docs/tools/jev.md) | — | config, API key, spend, models, one-off and raw requests |

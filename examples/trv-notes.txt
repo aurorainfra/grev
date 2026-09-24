@@ -1,0 +1,4 @@
+Meeting notes: we agreed on the budget,, the timeline and the hires.
+id,name,,email
+7,Ada,,ada@example.com
+Next steps: send the draft,, then book the room.
