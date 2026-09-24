@@ -37,6 +37,7 @@ builds:
   - { <<: *build, id: cutv, main: ./cmd/cutv, binary: cutv }
   - { <<: *build, id: seek, main: ./cmd/seek, binary: seek }
   - { <<: *build, id: probev, main: ./cmd/probev, binary: probev }
+  - { <<: *build, id: lookv, main: ./cmd/lookv, binary: lookv }
   - { <<: *build, id: jev, main: ./cmd/jev, binary: jev }
 
 archives:
@@ -58,12 +59,12 @@ nfpms:
     package_name: grev
     file_name_template: "{{ .ConventionalFileName }}"
     vendor: Aurora Infrastructure EU
-    maintainer: Aurora Infrastructure EU <oss@aurorainfra.eu>
+    maintainer: Lukasz Magiera <me@magik.net>
     homepage: https://github.com/aurorainfra/grev
     description: |-
       Unix filters that ask questions instead of matching patterns.
       grev is grep where the pattern is a question, plus isv, oneof, tagv,
-      rank, pickv, uniqv, unwrap, seg, cutv, seek and probev, built on
+      rank, pickv, uniqv, unwrap, seg, cutv, seek, probev and lookv, built on
       TypeSafe's Jev System One models.
     license: MIT OR Apache-2.0
     section: utils
@@ -108,7 +109,7 @@ nfpms:
         dst: /usr/share/doc/grev/README.md
         file_info: { mode: 0644 }
     archlinux:
-      packager: Aurora Infrastructure EU <oss@aurorainfra.eu>
+      packager: Lukasz Magiera <me@magik.net>
 
 checksum:
   name_template: checksums.txt
@@ -117,18 +118,17 @@ sboms:
   - artifacts: archive
 
 signs:
-  # Keyless (Sigstore) signature of the checksum file; verify with
-  # cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
-  #   --certificate-identity-regexp 'https://github.com/aurorainfra/grev/' \
-  #   --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+  # Keyless (Sigstore) signature of the checksum file, as a cosign bundle
+  # (the default format since cosign v3; also understood by v2). Verify with
+  #   cosign verify-blob --bundle checksums.txt.sigstore.json \
+  #     --certificate-identity-regexp 'https://github.com/aurorainfra/grev/' \
+  #     --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
   - cmd: cosign
     artifacts: checksum
-    signature: "${artifact}.sig"
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - --yes
 

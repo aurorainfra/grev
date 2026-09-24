@@ -1,0 +1,15 @@
+3.2 Failure handling
+
+When a worker crashes while holding a lease, the coordina-
+tor reassigns its partitions once the lease expires. In our
+deployment this takes between 4 and 9 seconds, during which
+the affected partitions accept writes but do not acknowledge
+them.
+
+We considered three ways to shorten that window:
+- shorter leases, which increase coordinator load;
+- fencing tokens, which require client changes;
+- a hot standby per partition, which doubles the cost.
+
+We chose shorter leases, because they keep the recov-
+ery path entirely on the server side.

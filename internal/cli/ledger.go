@@ -257,7 +257,22 @@ func writeLedger(path string, entries []LedgerEntry) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	// On Windows a rename over a file another process is reading fails
+	// with "Access is denied" until that reader closes it; retry briefly.
+	for try := 0; ; try++ {
+		err := os.Rename(tmp.Name(), path)
+		if err == nil || !busyOnWindows(err) || try >= 100 {
+			return err
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// busyOnWindows reports a Windows sharing violation: a lock file another
+// writer just deleted stays "delete pending" (so re-creating it is denied),
+// and files open in another process can't be replaced. Both clear up soon.
+func busyOnWindows(err error) bool {
+	return runtime.GOOS == "windows" && errors.Is(err, os.ErrPermission)
 }
 
 // locked runs fn holding the ledger's lock file.
@@ -274,7 +289,7 @@ func (l *Ledger) locked(fn func() error) error {
 			defer os.Remove(lock)
 			return fn()
 		}
-		if !errors.Is(err, os.ErrExist) {
+		if !errors.Is(err, os.ErrExist) && !busyOnWindows(err) {
 			return err
 		}
 		if fi, err := os.Stat(lock); err == nil && time.Since(fi.ModTime()) > lockStale {

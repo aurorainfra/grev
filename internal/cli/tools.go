@@ -21,6 +21,7 @@ var Tools = []ToolInfo{
 	{"cutv", "cut", "cut the table columns that match descriptions"},
 	{"seek", "find, cd", "find the path in a tree that matches a description"},
 	{"probev", "awk", "print per-record answer columns for many questions"},
+	{"lookv", "look, git bisect", "binary-search ordered records for where an answer flips"},
 	{"jev", "curl", "configure, inspect and query the Jev API behind the grev tools"},
 }
 

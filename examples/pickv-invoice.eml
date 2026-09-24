@@ -1,0 +1,22 @@
+From: Northwind Billing <billing@northwind.example>
+To: dana.kowalski@acme.example
+Cc: finance-team@acme.example
+Subject: Invoice INV-2026-0917 for September
+
+Hi Dana,
+
+Please find your September invoice below. As requested last month, we will
+send the paid receipt to your personal address, dana.personal@mailbox.example,
+instead of the shared finance inbox.
+
+  Subscription (Team plan, 12 seats)      $1,080.00
+  Additional storage (200 GB)                $40.00
+  Credit for August outage                  -$25.00
+  Subtotal                                $1,095.00
+  VAT (20%)                                 $219.00
+  Total due                               $1,314.00
+
+Payment is due by 2026-10-15. Questions? Reply to support@northwind.example.
+
+Thanks,
+Northwind Billing

@@ -3,6 +3,17 @@
 Unix filters that ask questions instead of matching patterns.
 
 ```console
+$ cat examples/menu.txt
+grilled ribeye steak with butter
+boiled carrots
+caesar salad with anchovies
+lentil soup with vegetable broth
+cheese omelette
+roasted chickpeas with paprika
+chicken tikka masala
+fresh fruit salad
+spaghetti carbonara
+tofu stir fry with rice
 $ grev 'is a vegan meal' examples/menu.txt
 boiled carrots
 lentil soup with vegetable broth
@@ -47,25 +58,29 @@ uniqv -c 'Are {1} and {2} the same company?' examples/companies.txt
 unwrap examples/memo.txt
 seek --verify 'the spend ledger' .
 
+# Bisect by meaning: the first health check that reports a failure (3 requests for 600 lines)
+lookv -n --about 'health checks, one per minute' 'reports a failing dependency' examples/lookv-health.log
+
 # Probabilities as columns, for awk
 probev -H -q 'refund: asks for money back' -q 'angry: the writer is angry' < examples/tickets.txt
 ```
 
 | tool | like | does |
 |---|---|---|
-| `grev` | grep | print the records the model says yes to |
-| `isv` | test | answer a yes/no question about the whole input with the exit status |
-| `oneof` | case | print which label fits the whole input |
-| `tagv` | awk | label every record; `--split DIR` routes records into files |
-| `rank` | sort | sort records by how well they fit, or by ordered levels |
-| `pickv` | grep -o | the one line or regex match that best answers a question |
-| `uniqv` | uniq | collapse adjacent records that mean the same thing |
-| `unwrap` | fmt | re-join hard-wrapped lines |
-| `seg` | csplit | split a stream into topic segments |
-| `cutv` | cut | cut the CSV/TSV columns that match a description |
-| `seek` | find | walk a directory tree to what a description names |
-| `probev` | awk | print per-record probability columns |
-| `jev` | — | config, API key, spend, models, one-off and raw requests |
+| [`grev`](docs/tools/grev.md) | grep | print the records the model says yes to |
+| [`isv`](docs/tools/isv.md) | test | answer a yes/no question about the whole input with the exit status |
+| [`oneof`](docs/tools/oneof.md) | case | print which label fits the whole input |
+| [`tagv`](docs/tools/tagv.md) | awk | label every record; `--split DIR` routes records into files |
+| [`rank`](docs/tools/rank.md) | sort | sort records by how well they fit, or by ordered levels |
+| [`pickv`](docs/tools/pickv.md) | grep -o | the one line or regex match that best answers a question |
+| [`uniqv`](docs/tools/uniqv.md) | uniq | collapse adjacent records that mean the same thing |
+| [`unwrap`](docs/tools/unwrap.md) | fmt | re-join hard-wrapped lines |
+| [`seg`](docs/tools/seg.md) | csplit | split a stream into topic segments |
+| [`cutv`](docs/tools/cutv.md) | cut | cut the CSV/TSV columns that match a description |
+| [`seek`](docs/tools/seek.md) | find | walk a directory tree to what a description names |
+| [`lookv`](docs/tools/lookv.md) | look, git bisect | find where an ordered input's answer flips, in a few rounds |
+| [`probev`](docs/tools/probev.md) | awk | print per-record probability columns |
+| [`jev`](docs/tools/jev.md) | — | config, API key, spend, models, one-off and raw requests |
 
 Every tool has `--help` and a man page. The common flags:
 
@@ -87,8 +102,9 @@ Every tool has `--help` and a man page. The common flags:
 
 ## Configure
 
-Everything lives in one file, `~/.grevconfig`, in git-config style (see `man grevconfig`).
-`jev key set` puts your [API key](https://console.typesafe.ai/keys) there with mode 0600:
+Everything lives in one file, `~/.grevconfig`, in git-config style; the full reference is
+[`docs/CONFIG.md`](docs/CONFIG.md) (or `man grevconfig`). `jev key set` puts your
+[API key](https://console.typesafe.ai/keys) there with mode 0600:
 
 ```ini
 [api]
@@ -101,8 +117,12 @@ Everything lives in one file, `~/.grevconfig`, in git-config style (see `man gre
 	daily = 5                             ; spend caps in USD, across all tools
 	monthly = 50
 [tool "grev"]
-	about = application logs              ; per-tool default for any long option
+	about = application logs              ; per-tool defaults for any long option,
+	threshold = 0.7                       ; e.g. how sure the model must be to say yes
 ```
+
+Thresholds are set per tool because `-t` means different things: P(yes) in `grev`, the minimum
+confidence of a choice in `tagv`, a path score in `seek`.
 
 Manage it with `jev config set limits.daily 5` or `jev config list --show-origin`, and check
 your spend with `jev spend`. Command-line flags beat environment variables, which beat the

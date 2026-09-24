@@ -1,0 +1,14 @@
+billing
+  refund = asks for money back
+  invoice = questions about charges, seats or invoices
+  pricing = plans, discounts, quotes
+technical
+  outage = the service or a page is down
+  crash = the app crashes or freezes
+  email = emails that don't arrive
+  data = import, export or wrong data
+account
+  profile = changing email, name or password
+product
+  feature-request = asks for something new
+  praise = compliments, thanks

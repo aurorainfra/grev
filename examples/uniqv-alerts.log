@@ -1,0 +1,8 @@
+09:02 [PAGE] api-gateway: 5xx rate above 5% for 5 minutes
+09:03 [PAGE] api-gateway: error rate still elevated (7.2% 5xx)
+09:05 [PAGE] api-gateway returning 502s to 7% of requests
+09:11 [WARN] db-primary: replication lag 45s
+09:12 [WARN] db-primary replica is 52 seconds behind
+09:20 [PAGE] api-gateway: 5xx rate back above 5%
+09:31 [INFO] deploy web-frontend v2.14.0 finished
+09:33 [WARN] disk /var on build-04 at 91%

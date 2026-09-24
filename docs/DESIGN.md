@@ -108,7 +108,7 @@ lock file. Parallel invocations can overshoot a cap by at most what they already
 - **Names:**
   - `grev` is grep + Jev.
   - A `v` suffix marks a semantic variant of a classic tool: `uniqv`, `cutv`, `isv`, `tagv`,
-    `pickv`, `probev`.
+    `pickv`, `probev`, and `lookv`, which binary-searches like look(1).
   - `is`, `tag`, `pick` and `probe` were renamed after a survey of Debian, Arch/AUR, Fedora,
     Alpine and Homebrew binaries. `is` clashes with Microsoft's inshellisense, `tag` with
     Homebrew's `tag`, `pick` with mptre/pick and nmh (Debian policy §10.1), and `probe` with

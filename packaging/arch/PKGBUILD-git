@@ -1,4 +1,4 @@
-# Maintainer: Aurora Infrastructure EU <oss@aurorainfra.eu>
+# Maintainer: Lukasz Magiera <me@magik.net>
 #
 # Development package, built from the latest commit:
 #   makepkg -p PKGBUILD-git -si

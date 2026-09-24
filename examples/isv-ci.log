@@ -1,0 +1,14 @@
+=== RUN   TestParseConfig
+--- PASS: TestParseConfig (0.00s)
+=== RUN   TestMigrations
+--- PASS: TestMigrations (1.84s)
+=== RUN   TestUploadResumes
+    upload_test.go:88: dial tcp 127.0.0.1:41873: connect: connection refused
+    upload_test.go:88: test server did not start within 2s
+--- FAIL: TestUploadResumes (2.01s)
+=== RUN   TestInvoiceTotals
+--- PASS: TestInvoiceTotals (0.02s)
+FAIL
+FAIL	example.com/shop/internal/upload	4.113s
+ok  	example.com/shop/internal/billing	0.412s
+Error: Process completed with exit code 1.

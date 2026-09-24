@@ -1,4 +1,4 @@
-# Maintainer: Aurora Infrastructure EU <oss@aurorainfra.eu>
+# Maintainer: Lukasz Magiera <me@magik.net>
 #
 # Release package, built from the tagged source tarball. After tagging a new
 # version: bump pkgver, reset pkgrel=1, run `updpkgsums`, then `makepkg -si`.

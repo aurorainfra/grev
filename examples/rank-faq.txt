@@ -1,0 +1,8 @@
+Q: How do I change my plan? A: Open Settings > Billing and pick a new plan; changes apply at the next renewal.
+Q: Can I export my data? A: Yes, Settings > Data > Export gives you a CSV of all orders and customers.
+Q: I forgot my password. A: Use "Forgot password" on the sign-in page; the reset link is valid for 30 minutes.
+Q: How do I add a teammate? A: Settings > Team > Invite, then choose their role.
+Q: Why was I charged twice? A: A second charge is usually a pending authorization that drops off within 3 days.
+Q: Is there an API? A: Yes, see developers.example.com; API keys live under Settings > API.
+Q: How do I turn on two-factor authentication? A: Settings > Security > Two-factor, then scan the QR code.
+Q: Can I get a refund? A: Annual plans can be refunded within 14 days of purchase.

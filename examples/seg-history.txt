@@ -1,0 +1,12 @@
+git clone git@github.com:acme/billing.git
+cd billing
+make deps
+go test ./...
+go test -run TestInvoiceRounding ./internal/invoice
+git checkout -b fix-rounding
+git commit -am "Round invoice totals half-even"
+docker ps
+docker logs -f billing-worker-3
+docker restart billing-worker-3
+ssh prod-db-1
+psql -c 'select count(*) from pending_jobs'

@@ -17,12 +17,13 @@ jobs:
     name: linux (lint, tests, race, packaging dry run)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # git describe / changelog
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache: false # no dependencies (no go.sum) to cache
       - run: make lint
       - run: make test
       - run: make test-race
@@ -31,17 +32,17 @@ jobs:
           make man completions
           for f in man/*.gz; do zcat "$f" | groff -man -Tutf8 -ww -z; done
           for f in completions/bash/*; do bash -n "$f"; done
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: "~> v2"
           args: check
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: "~> v2"
           args: release --snapshot --clean --skip=publish,sign,sbom
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: snapshot-packages
           path: |
@@ -61,10 +62,11 @@ jobs:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache: false # no dependencies (no go.sum) to cache
       - run: go vet ./...
       - run: go build ./...
       - run: go test ./internal/...

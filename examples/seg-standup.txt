@@ -1,0 +1,12 @@
+Release 2.14 is on track for Thursday.
+The last blocker, the checkout timeout, was fixed yesterday.
+QA signed off on the payment flows this morning.
+We still need release notes; Priya will draft them today.
+On-call was rough: the gateway paged four times overnight.
+Root cause was the new rate limiter rejecting health checks.
+Marco rolled the limiter back at 3am and error rates recovered.
+We need a follow-up to exempt health checks before re-enabling it.
+Two candidates for the backend role are in final interviews next week.
+Please sign up for interview slots in the hiring sheet.
+The team offsite is confirmed for the 14th in Lisbon.
+Book flights by Friday so finance can approve them in one batch.

@@ -1,0 +1,6 @@
+cust_id,acct_nm,prim_cntct,prim_cntct_eml,ph_1,created_ts,mrr_usd,tier_cd,rgn
+10231,Northwind Traders,Anne Dodsworth,anne@northwind.example,+1 206 555 0134,2025-11-03T09:12:44Z,1290.00,ENT,NA-W
+10232,Blue Harbor Cafe,Luis Ortega,luis.ortega@blueharbor.example,+34 91 555 0199,2026-01-17T15:02:10Z,49.00,STD,EU-S
+10233,Kestrel Robotics,Mina Park,mpark@kestrel.example,+82 2 555 0171,2026-02-28T02:40:05Z,480.00,PRO,APAC
+10234,Hollis & Webb LLP,Grace Webb,gwebb@holliswebb.example,+44 20 7946 0112,2026-04-09T11:23:59Z,960.00,PRO,EU-W
+10235,Sunfield Farms,Tom Reyes,orders@sunfield.example,+1 559 555 0148,2026-06-21T18:05:31Z,49.00,STD,NA-W
