@@ -48,9 +48,9 @@ dishes, the heaviest ones:
 
 ```console
 $ rank -n -r -m3 --about 'restaurant menu' 'is a light meal' examples/menu.txt
-1:grilled ribeye steak with butter
-7:chicken tikka masala
-9:spaghetti carbonara
+1:chicken tikka masala
+3:spaghetti carbonara
+4:tofu stir fry with rice
 ```
 
 ## Options worth knowing

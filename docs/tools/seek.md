@@ -53,7 +53,7 @@ No good match exits 1:
 
 ```console
 $ seek -s 'a recipe for banana bread' .
-seek: best match examples/menu.txt scored 0.03, below -t 0.15
+seek: best match examples/menu.txt scored 0.02, below -t 0.15
 $ echo $?
 1
 ```
