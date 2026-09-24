@@ -4,30 +4,14 @@ Unix filters that ask questions instead of matching patterns.
 
 ```console
 $ cat examples/menu.txt
-grilled ribeye steak with butter
-boiled carrots
-caesar salad with anchovies
-lentil soup with vegetable broth
-cheese omelette
-roasted chickpeas with paprika
 chicken tikka masala
 fresh fruit salad
 spaghetti carbonara
 tofu stir fry with rice
+
 $ grev 'is a vegan meal' examples/menu.txt
-boiled carrots
-lentil soup with vegetable broth
-roasted chickpeas with paprika
 fresh fruit salad
 tofu stir fry with rice
-```
-
-```console
-$ grev -A1 -p 'Line explains who the Licensor is' LICENSE-APACHE
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
-
-grev: 202 q · 2 req · 10,039 tok · $0.0004 · 0.8s · jev-1.13.0
 ```
 
 The tools run on [TypeSafe's](https://typesafe.ai) Jev models, which answer typed questions with
