@@ -4,7 +4,7 @@
 # version: bump pkgver, reset pkgrel=1, run `updpkgsums`, then `makepkg -si`.
 
 pkgname=grev
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='Unix filters that ask questions instead of matching patterns (grep, test, sort, uniq… on TypeSafe Jev models)'
 arch=('x86_64' 'aarch64')
