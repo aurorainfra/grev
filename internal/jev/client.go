@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -94,15 +95,24 @@ func retryable(status int) bool {
 	return false
 }
 
+// debugRequests (GREV_DEBUG=requests) prints request and response bodies.
+var debugRequests = slices.Contains(strings.Split(os.Getenv("GREV_DEBUG"), ","), "requests")
+
 // Do sends one System One request, retrying transient failures.
 func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
+	if debugRequests {
+		fmt.Fprintf(os.Stderr, "jev request: %s\n", body)
+	}
 	out, err := c.call(ctx, http.MethodPost, "/v1/systemone", body)
 	if err != nil {
 		return nil, err
+	}
+	if debugRequests {
+		fmt.Fprintf(os.Stderr, "jev response: %s\n", out)
 	}
 	var resp Response
 	if err := json.Unmarshal(out, &resp); err != nil {

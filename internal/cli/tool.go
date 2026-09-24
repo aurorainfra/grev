@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
@@ -33,6 +34,13 @@ func version() string {
 		return bi.Main.Version
 	}
 	return "dev"
+}
+
+// UserAgent identifies the tool to the API, e.g.
+// "grev/0.1.0 (pickv; linux/amd64; +https://github.com/aurorainfra/grev)".
+func UserAgent(tool string) string {
+	return fmt.Sprintf("grev/%s (%s; %s/%s; +https://github.com/aurorainfra/grev)",
+		strings.TrimPrefix(version(), "v"), tool, runtime.GOOS, runtime.GOARCH)
 }
 
 // DefaultConfirmAbove is the built-in safeguard: runs quoted above this many
@@ -344,7 +352,7 @@ func (t *Tool) Engine() *Engine {
 	if key.Warn != "" {
 		t.Warnf("warning: %s", key.Warn)
 	}
-	c := jev.NewClient(key.Value, fmt.Sprintf("grev-tools/%s %s", version(), t.Name))
+	c := jev.NewClient(key.Value, UserAgent(t.Name))
 	if os.Getenv("TYPESAFE_BASE_URL") == "" {
 		if ep := t.cfg.Str("api", "", "endpoint"); ep != "" {
 			c.BaseURL = strings.TrimRight(ep, "/")

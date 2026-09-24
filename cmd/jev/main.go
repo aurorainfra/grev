@@ -294,7 +294,7 @@ func storeKey(t *cli.Tool, check bool, path, key string) {
 }
 
 func verify(t *cli.Tool, key string) (int, error) {
-	c := jev.NewClient(key, "grev-tools/jev")
+	c := jev.NewClient(key, cli.UserAgent("jev"))
 	if os.Getenv("TYPESAFE_BASE_URL") == "" {
 		if ep := t.Config().Str("api", "", "endpoint"); ep != "" {
 			c.BaseURL = strings.TrimRight(ep, "/")
@@ -478,10 +478,19 @@ func raw(t *cli.Tool, args []string) {
 		t.Fatalf("request is not a JSON object: %v", err)
 	}
 	e := t.Engine()
+	// Send the body as written: re-encoding it would sort every object's
+	// keys, and key order is part of what the model reads. Only a missing
+	// "model" is spliced in, at the front.
+	b := []byte(strings.TrimSpace(body))
 	if _, ok := req["model"]; !ok {
-		req["model"] = e.Model
+		m, _ := json.Marshal(e.Model)
+		rest := strings.TrimSpace(string(b[1:]))
+		sep := ","
+		if strings.HasPrefix(rest, "}") {
+			sep = ""
+		}
+		b = []byte(`{"model":` + string(m) + sep + rest)
 	}
-	b, _ := json.Marshal(req)
 	nq := 0
 	if qs, ok := req["questions"].(map[string]any); ok {
 		nq = len(qs)

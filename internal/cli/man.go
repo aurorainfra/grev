@@ -343,7 +343,7 @@ func manEnvironment(w io.Writer) {
 		{"GREV_RPM, GREV_TPS", "Request and token rate ceilings, overriding limits.rpm and limits.tps."},
 		{"GREV_MAX_Q", "Most questions packed into one request, overriding limits.questionsPerRequest."},
 		{"GREV_PRICE_PER_MTOK", "Price in USD per million input tokens, overriding the built-in table and [model] prices."},
-		{"GREV_DEBUG", "sched traces the adaptive concurrency controller (-J max) on stderr."},
+		{"GREV_DEBUG", "Comma-separated debug traces on stderr: requests prints every request and response body (never the key); sched traces the adaptive concurrency controller (-J max); seek traces seek's descent."},
 	} {
 		tp(w, `\fB`+escCode(e[0])+`\fR`, e[1])
 	}

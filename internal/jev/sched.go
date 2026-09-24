@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -260,7 +261,7 @@ func (s *Sched) SetRates(rpm, tps float64) {
 // Rates returns the request and token rate ceilings in use.
 func (s *Sched) Rates() (rpm, tps float64) { return s.rpm, s.tps }
 
-var debugSched = os.Getenv("GREV_DEBUG") == "sched"
+var debugSched = slices.Contains(strings.Split(os.Getenv("GREV_DEBUG"), ","), "sched")
 
 func envFloat(name string, def float64) float64 {
 	if v := os.Getenv(name); v != "" {

@@ -45,6 +45,7 @@ type Req struct {
 	Questions int
 	Bytes     int
 	Model     string // the request's model field, when it parsed
+	UserAgent string
 }
 
 // Server is a running fake API.
@@ -238,7 +239,7 @@ func (s *Server) systemOne(w http.ResponseWriter, r *http.Request) {
 		}
 		answers[id] = s.o.Oracle(req.State, q)
 	}
-	s.record(Req{Status: 200, Questions: len(req.Questions), Bytes: len(body), Model: req.Model})
+	s.record(Req{Status: 200, Questions: len(req.Questions), Bytes: len(body), Model: req.Model, UserAgent: r.UserAgent()})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"model":   s.o.Model,
 		"answers": answers,

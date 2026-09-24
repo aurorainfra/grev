@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 
@@ -368,7 +369,7 @@ yes/no question each).`
 	t.Exit(cli.ExitYes)
 }
 
-var debug = os.Getenv("GREV_DEBUG") == "seek"
+var debug = slices.Contains(strings.Split(os.Getenv("GREV_DEBUG"), ","), "seek")
 
 type kv struct {
 	k string
