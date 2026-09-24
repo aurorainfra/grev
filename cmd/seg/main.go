@@ -24,8 +24,8 @@ const defaultQuestion = "Does a new topic begin at {2}?"
 // Window limits: each window of boundaries shares one state, the records it
 // covers tagged with ids, plus -W records of context on each side.
 const (
-	winRecs  = 64
-	winBytes = 20_000
+	winRecs = 64
+	winTok  = 5_500 // estimated tokens
 )
 
 func recID(i int) string { return fmt.Sprintf("R%04d", i+1) }
@@ -149,9 +149,9 @@ The model sees the records around each boundary, tagged with ids.`
 	// windows cuts boundaries from..last into windows and sends their items.
 	windows := func(recs *buffer, from, last int, send func(*jev.Item) bool) bool {
 		for from <= last {
-			to, size := from, 0
-			for to < last && to-from+1 < winRecs && size < winBytes {
-				size += len(recs.get(to))
+			to, size := from, 0.0
+			for to < last && to-from+1 < winRecs && size < winTok {
+				size += jev.Tokens(recs.get(to))
 				to++
 			}
 			for _, it := range items(recs, from, to) {

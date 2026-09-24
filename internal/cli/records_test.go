@@ -2,11 +2,13 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/aurorainfra/grev/internal/jev"
 )
@@ -236,5 +238,38 @@ func TestFormatting(t *testing.T) {
 	}
 	if got := trunc("héllo world", 6); got != "héllo…" {
 		t.Errorf("trunc = %q", got)
+	}
+}
+
+func TestChunks(t *testing.T) {
+	// Dense log lines: chunks respect the token budget, keep line boundaries
+	// and lose nothing.
+	var b strings.Builder
+	for i := 0; i < 3000; i++ {
+		fmt.Fprintf(&b, "\x1b[2m2026-03-04T12:%02d:%02d.%03dZ\x1b[0m INFO sector %d proved in %d.%dms\n", i/60%60, i%60, i, i*7, i%97, i%10)
+	}
+	text := b.String()
+	chunks := Chunks(text, 4000)
+	if len(chunks) < 10 || strings.Join(chunks, "") != text {
+		t.Fatalf("%d chunks; lossless: %v", len(chunks), strings.Join(chunks, "") == text)
+	}
+	for i, c := range chunks {
+		if jev.EstText(c) > 4001 || i < len(chunks)-1 && !strings.HasSuffix(c, "\n") {
+			t.Fatalf("chunk %d: %d tokens, ends %q", i, jev.EstText(c), c[len(c)-5:])
+		}
+	}
+	// One huge line is cut on character boundaries.
+	huge := strings.Repeat("日本語 1234 ", 5000)
+	chunks = Chunks(huge, 3000)
+	if strings.Join(chunks, "") != huge {
+		t.Fatal("huge line: not lossless")
+	}
+	for i, c := range chunks {
+		if !utf8.ValidString(c) || jev.EstText(c) > 3001 {
+			t.Fatalf("huge chunk %d: valid %v, %d tokens", i, utf8.ValidString(c), jev.EstText(c))
+		}
+	}
+	if got := Chunks("short\n", 100); len(got) != 1 || got[0] != "short\n" {
+		t.Fatalf("short: %q", got)
 	}
 }

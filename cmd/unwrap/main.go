@@ -35,7 +35,7 @@ const (
 // context before it), small enough to keep distractors down.
 const (
 	winLines = 120
-	winBytes = 20_000
+	winTok   = 5_500 // estimated tokens
 )
 
 func lineID(i int) string { return fmt.Sprintf("L%04d", i+1) }
@@ -292,7 +292,7 @@ cookbook; override with -t DANGLING,TERMINAL).`
 		base := 0
 		total := func() int { return base + len(lines) }
 		var pend []*brk
-		winStart, winSize := 0, 0
+		winStart, winSize := 0, 0.0
 		var timer <-chan time.Time
 		cut := func() bool {
 			defer func() {
@@ -350,8 +350,8 @@ cookbook; override with -t DANGLING,TERMINAL).`
 					}
 				}
 				d.add(line, decided)
-				winSize += len(line) + 8
-				if total()-winStart >= winLines || winSize >= winBytes {
+				winSize += jev.Tokens(line) + 3
+				if total()-winStart >= winLines || winSize >= winTok {
 					if !cut() {
 						return nil
 					}

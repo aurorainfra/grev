@@ -18,8 +18,9 @@ $ man tar | pickv 'how do I list the contents of an archive?'
      tar -t [-f ARCHIVE] [OPTIONS] [MEMBER...]
 ```
 
-`man tar` is about 1,150 lines. `pickv` read it in windows of up to 255 lines, one request each,
-asking for the best line and whether the window answers the question at all. It then asked one
+`man tar` is about 1,150 lines. `pickv` read it in windows of up to 255 lines (or about 16k
+tokens), one request each, asking for the best line and whether the window answers the question
+at all. It then asked one
 final round among the window winners. That was 5 requests, about 26k tokens and $0.0011.
 
 ## More examples
@@ -32,6 +33,19 @@ $ man tar | pickv -m3 -s -n 'how do I extract into a different directory?'
 0.10	289:            Extract  all  files  into DIR, or, if used without argument, into a
 0.10	749:            Change to DIR before performing any operations.  This option is or‐
 ```
+
+A description works as well as a question. Without a `?`, `pickv` asks which line best fits the
+description, and whether any line fits it at all:
+
+```console
+$ pickv -m2 -s -n 'the most unusual line' examples/app.log
+0.59	7:2026-09-24T09:00:34Z ERROR panic: runtime error: invalid memory address or nil pointer dereference [signal SIGSEGV: segmentation violation code=0x1 addr=0x18 pc=0x6a3f2e]
+0.14	15:2026-09-24T09:01:15Z INFO  config reloaded (feature flags: new_checkout=on)
+```
+
+Big, coloured logs are fine. Colour codes are stripped from what the model reads, and the line is
+printed as it was. A 5,000-line, 900 kB log with colours takes about 25 requests and 435k tokens,
+about $0.02.
 
 No answer in the input: nothing is printed and the exit status is 1. Use `--force` to see the
 closest miss anyway.

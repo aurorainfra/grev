@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -108,7 +109,7 @@ func TestEngineStreamingFlush(t *testing.T) {
 	}
 }
 
-func TestEngineSplitsOn422(t *testing.T) {
+func TestEngineSplitsOverLimit(t *testing.T) {
 	srv := jevtest.New(t, jevtest.Options{MaxBody: 1500})
 	e := engine(t, srv, "k", 2, false)
 	e.MaxQ = 50
@@ -122,11 +123,32 @@ func TestEngineSplitsOn422(t *testing.T) {
 			t.Fatalf("result %d: %v %v", i, r.Item.Tag, r.Err)
 		}
 	}
-	if len(res) != 40 || srv.Count(422) == 0 || srv.Answered() != 40 {
-		t.Fatalf("results %d, 422s %d, answered %d", len(res), srv.Count(422), srv.Answered())
+	if len(res) != 40 || srv.Count(400) == 0 || srv.Answered() != 40 {
+		t.Fatalf("results %d, 400s %d, answered %d", len(res), srv.Count(400), srv.Answered())
 	}
 	if s := e.Stats.Snapshot(); s.FailedQ != 0 || s.DoneQ != 40 || s.Inflight != 0 {
 		t.Fatalf("stats after split: %+v", s)
+	}
+}
+
+func TestEngineOverLimitSingleItem(t *testing.T) {
+	// One question the server still finds too big (the estimate was low):
+	// it fails with ErrTooLarge, so the tool can send less; others go on.
+	srv := jevtest.New(t, jevtest.Options{MaxBody: 2000})
+	e := engine(t, srv, "k", 1, false)
+	its := []*jev.Item{
+		jev.NewItem(jev.NewState("small"), jev.Noul("q yes", nil, nil), 0),
+		jev.NewItem(jev.NewState(strings.Repeat("word ", 1000)), jev.Noul("q", nil, nil), 1),
+	}
+	res, err := collect(t, e, context.Background(), its)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res[0].Err != nil || !errors.Is(res[1].Err, jev.ErrTooLarge) || !jev.IsOverLimit(res[1].Err) {
+		t.Fatalf("results: %v / %v", res[0].Err, res[1].Err)
+	}
+	if !strings.Contains(res[1].Err.Error(), "max_tokens_exceeded") {
+		t.Fatalf("the API's answer should be kept: %v", res[1].Err)
 	}
 }
 
@@ -254,7 +276,7 @@ func TestEngineCancel(t *testing.T) {
 func TestEngineTooBigItemFailsLocally(t *testing.T) {
 	srv := jevtest.New(t, jevtest.Options{})
 	e := engine(t, srv, "k", 1, false)
-	huge := jev.NewState(string(make([]byte, 120_000)))
+	huge := jev.NewState(strings.Repeat("1234567890", 4_000)) // ~50k tokens
 	its := []*jev.Item{
 		jev.NewItem(jev.NewState("small"), jev.Noul("q yes", nil, nil), 0),
 		jev.NewItem(huge, jev.Noul("q", nil, nil), 1),

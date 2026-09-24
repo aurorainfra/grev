@@ -60,10 +60,13 @@ type opts struct {
 	backslash                bool   // the path list used \ separators (Windows): print them back that way
 }
 
-// peekBudget caps the bytes of file heads (--peek) shown in one Choice, so
-// the question stays well inside one request however many files a directory
-// holds.
-const peekBudget = 40_000
+// Budgets, in estimated tokens per Choice, for the file heads (--peek) and
+// the sampled names of subdirectories, so the question stays well inside the
+// model's 32k-token context however many entries a directory holds.
+const (
+	peekBudget  = 10_000
+	namesBudget = 10_000
+)
 
 func main() {
 	t := cli.New("seek")
@@ -331,7 +334,7 @@ yes/no question each).`
 		for i, r := range results {
 			q := jev.Obj{{K: "path", V: displayDir(r.c.n)}}
 			if r.c.n.dir {
-				q = append(q, jev.KV{K: "contains", V: sampleNames(r.c.n, max(o.sample, 12))})
+				q = append(q, jev.KV{K: "contains", V: sampleNames(r.c.n, max(o.sample, 12), namesBudget)})
 			} else {
 				q = append(q, jev.KV{K: "head", V: o.head(r.c.n, max(o.peek, 40), 8000)})
 			}
@@ -442,9 +445,10 @@ func (o opts) options(n *node, isRoot bool) (jev.Opts, map[string]*node, jev.Obj
 			files++
 		}
 	}
-	peekBytes := 0 // per file
+	dirs := len(eligible) - files
+	peekTok := 0 // per file
 	if o.peek > 0 && files > 0 {
-		peekBytes = peekBudget / files
+		peekTok = peekBudget / files
 	}
 	for _, k := range eligible {
 		key := k.name
@@ -454,9 +458,9 @@ func (o opts) options(n *node, isRoot bool) (jev.Opts, map[string]*node, jev.Obj
 		kids[key] = k
 		var desc any
 		if k.dir {
-			desc = jev.Obj{{K: "directory_containing", V: sampleNames(k, per)}}
-		} else if peekBytes >= 40 {
-			desc = jev.Obj{{K: "file_starting_with", V: o.head(k, o.peek, peekBytes)}}
+			desc = jev.Obj{{K: "directory_containing", V: sampleNames(k, per, namesBudget/dirs)}}
+		} else if peekTok >= 10 {
+			desc = jev.Obj{{K: "file_starting_with", V: o.head(k, o.peek, peekTok)}}
 		}
 		keys = append(keys, jev.Opt{Key: key, Desc: desc})
 	}
@@ -508,31 +512,32 @@ func (o opts) outPath(n *node) string {
 
 // head returns the first n lines of file node k, each clipped to 120
 // characters and all together to about maxBytes.
-func (o opts) head(k *node, n, maxBytes int) []string {
+func (o opts) head(k *node, n, maxTok int) []string {
 	f, err := os.Open(o.outPath(k))
 	if err != nil {
 		return nil
 	}
 	defer f.Close()
 	var lines []string
-	size := 0
+	size := 0.0
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
-	for len(lines) < n && size < maxBytes && sc.Scan() {
+	for len(lines) < n && size < float64(maxTok) && sc.Scan() {
 		l := cli.Clip(sc.Text(), 120)
-		if left := maxBytes - size; len(l) > left {
-			l = cli.Clip(l, max(1, left/2)) // runes may be multi-byte
+		if left := float64(maxTok) - size; jev.Tokens(l) > left {
+			l = l[:jev.Fit(l, int(left))] + "…"
 		}
 		lines = append(lines, l)
-		size += len(l) + 4
+		size += jev.Tokens(l) + 3 // quotes and comma
 	}
 	return lines
 }
 
-// sampleNames lists up to n names beneath directory d, breadth first, as
-// paths relative to d (directories end in "/").
-func sampleNames(d *node, n int) []string {
+// sampleNames lists up to n names (about maxTok tokens) beneath directory d,
+// breadth first, as paths relative to d (directories end in "/").
+func sampleNames(d *node, n, maxTok int) []string {
 	var out []string
+	size := 0.0
 	type item struct {
 		n      *node
 		prefix string
@@ -542,15 +547,18 @@ func sampleNames(d *node, n int) []string {
 		it := queue[0]
 		queue = queue[1:]
 		for _, k := range it.n.kids {
-			if len(out) >= n {
-				break
-			}
 			name := it.prefix + k.name
 			if k.dir {
 				name += "/"
+			}
+			if len(out) >= n || len(out) > 0 && size+jev.Tokens(name) > float64(maxTok) {
+				return out
+			}
+			if k.dir {
 				queue = append(queue, item{k, name})
 			}
 			out = append(out, name)
+			size += jev.Tokens(name) + 3
 		}
 	}
 	return out

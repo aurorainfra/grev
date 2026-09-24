@@ -34,7 +34,7 @@ type Options struct {
 	Capacity      int                  // >0: requests beyond this many in flight get 429
 	RetryAfterMS  int                  // 429 retry-after-ms header (default 50 when RetryAfterSec is 0)
 	RetryAfterSec int                  // 429 Retry-After header in seconds, used if set
-	MaxBody       int                  // >0: request bodies larger than this get a 422 context-length error
+	MaxBody       int                  // >0: request bodies larger than this get 400 max_tokens_exceeded, as jev-1.13 answers
 	FailFirst     int                  // the first N POSTs answer 500
 	Model         string               // model reported in responses (default jev-1.13.0)
 }
@@ -189,9 +189,8 @@ func (s *Server) systemOne(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.o.MaxBody > 0 && len(body) > s.o.MaxBody {
-		s.record(Req{Status: 422, Questions: len(req.Questions), Bytes: len(body), Model: req.Model})
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"detail": "request exceeds the model's context length (too many tokens)"})
+		s.record(Req{Status: 400, Questions: len(req.Questions), Bytes: len(body), Model: req.Model})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error_type": "max_tokens_exceeded"})
 		return
 	}
 	s.mu.Lock()

@@ -244,29 +244,33 @@ func Chunks(text string, maxTok int) []string {
 	}
 	var out []string
 	var cur strings.Builder
-	maxBytes := max(1, int(float64(maxTok)*3.6)) // matches jev's estimate
+	curTok := 0.0
+	flush := func() {
+		if cur.Len() > 0 {
+			out = append(out, cur.String())
+			cur.Reset()
+			curTok = 0
+		}
+	}
 	for _, line := range strings.SplitAfter(text, "\n") {
-		for jev.EstText(line) > maxTok { // a single huge line (minified code…)
-			if cur.Len() > 0 {
-				out = append(out, cur.String())
-				cur.Reset()
-			}
-			cut := maxBytes
-			for cut > 0 && !utf8.RuneStart(line[cut]) {
-				cut--
+		lt := jev.Tokens(line)
+		for lt > float64(maxTok) { // a single huge line (minified code…)
+			flush()
+			cut := max(1, jev.Fit(line, maxTok))
+			for cut < len(line) && !utf8.RuneStart(line[cut]) {
+				cut++
 			}
 			out = append(out, line[:cut])
 			line = line[cut:]
+			lt = jev.Tokens(line)
 		}
-		if cur.Len() > 0 && jev.EstText(cur.String()+line) > maxTok {
-			out = append(out, cur.String())
-			cur.Reset()
+		if curTok+lt > float64(maxTok) {
+			flush()
 		}
 		cur.WriteString(line)
+		curTok += lt
 	}
-	if cur.Len() > 0 {
-		out = append(out, cur.String())
-	}
+	flush()
 	return out
 }
 

@@ -2,6 +2,8 @@ package clitest
 
 import (
 	"fmt"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -201,13 +203,82 @@ func TestPickRegexQuestion(t *testing.T) {
 // warning; the search goes on.
 func TestPickOversizeLine(t *testing.T) {
 	_, env := fake(t, jevtest.Options{Oracle: pickOracle})
-	in := strings.Repeat("x", 70_000) + "\nthe real ANSWER\nmore\n"
+	in := strings.Repeat("x9", 20_000) + "\nthe real ANSWER\nmore\n" // ≈30k tokens
 	r := run(t, env, in, "pickv", "-n", "q?")
 	if r.Code != 0 || r.Stdout != "2:the real ANSWER\n" || !strings.Contains(r.Stderr, "skipping record 1") {
 		t.Fatalf("oversize line: %+v", r)
 	}
-	if r := run(t, env, strings.Repeat("y", 70_000)+"\n", "pickv", "q?"); r.Code != 2 {
+	if r := run(t, env, strings.Repeat("y9", 20_000)+"\n", "pickv", "q?"); r.Code != 2 {
 		t.Fatalf("only an oversize line: %+v", r)
+	}
+}
+
+// TestPickDescription: a QUESTION without "?" is asked as a description of
+// the line, for both the choice and the existence check.
+func TestPickDescription(t *testing.T) {
+	var mu sync.Mutex
+	var seen []string
+	_, env := fake(t, jevtest.Options{Oracle: func(state any, q jev.Question) jev.Answer {
+		mu.Lock()
+		seen = append(seen, q.Type+": "+instrText(q))
+		mu.Unlock()
+		return pickOracle(state, q)
+	}})
+	expect(t, run(t, env, "boot\nthe ANSWER\n", "pickv", "the most interesting line"), 0, "the ANSWER\n")
+	sort.Strings(seen)
+	want := []string{
+		`choice: Which line of the document best fits this description: "the most interesting line"?`,
+		`noul: Does any line of the document fit this description: "the most interesting line"?`,
+	}
+	if !reflect.DeepEqual(seen, want) {
+		t.Fatalf("questions: %q", seen)
+	}
+	seen = nil
+	expect(t, run(t, env, "boot\nthe ANSWER\n", "pickv", "what happened?"), 0, "the ANSWER\n")
+	sort.Strings(seen)
+	if len(seen) != 2 || seen[0] != `choice: Which line of the document contains the answer to: "what happened?"?` {
+		t.Fatalf("questions: %q", seen)
+	}
+}
+
+// TestPickResplitsOverLimit: when the API rejects a window as over the
+// context (the estimate was low), pick halves it and asks again.
+func TestPickResplitsOverLimit(t *testing.T) {
+	srv, env := fake(t, jevtest.Options{Oracle: pickOracle, MaxBody: 3000})
+	var b strings.Builder
+	for i := 1; i <= 200; i++ {
+		if i == 150 {
+			b.WriteString("the ANSWER is here\n")
+			continue
+		}
+		fmt.Fprintf(&b, "line %d with some filler text\n", i)
+	}
+	r := run(t, env, b.String(), "pickv", "-n", "q?")
+	if r.Code != 0 || r.Stdout != "150:the ANSWER is here\n" || strings.Contains(r.Stderr, "skipping") {
+		t.Fatalf("re-split: %+v", r)
+	}
+	if srv.Count(400) == 0 {
+		t.Fatal("expected over-limit rejections")
+	}
+}
+
+// TestPickStripsEscapes: the model sees text without colour codes; the output
+// keeps them.
+func TestPickStripsEscapes(t *testing.T) {
+	var mu sync.Mutex
+	sawEsc := false
+	_, env := fake(t, jevtest.Options{Oracle: func(state any, q jev.Question) jev.Answer {
+		if strings.Contains(stateDoc(state), "\x1b") {
+			mu.Lock()
+			sawEsc = true
+			mu.Unlock()
+		}
+		return pickOracle(state, q)
+	}})
+	in := "\x1b[2m12:00\x1b[0m boot\n\x1b[31m12:01 the ANSWER\x1b[0m\n"
+	expect(t, run(t, env, in, "pickv", "q?"), 0, "\x1b[31m12:01 the ANSWER\x1b[0m\n")
+	if sawEsc {
+		t.Fatal("escape sequences reached the model")
 	}
 }
 

@@ -17,23 +17,31 @@ import (
 	"github.com/aurorainfra/grev/internal/jev"
 )
 
-// Window limits: a Choice takes at most 255 options, and a smaller state
-// means fewer distractors.
+// Window limits: a Choice takes at most 255 options, the document plus the
+// question must fit the model's 32k-token context, and a smaller state means
+// fewer distractors.
 const (
-	maxOpts  = 255
-	winBytes = 60_000
+	maxOpts = 255
+	winTok  = 16_000 // estimated tokens of document per window
 	// finalists kept per window for the next round
 	keepPerWindow = 3
 	// longer regex matches (or multi-line ones) are offered by id, not text
 	maxKeyLen = 100
 )
 
-// Questions, following TypeSafe's line-by-line search cookbook.
+// Questions, following TypeSafe's line-by-line search cookbook. A QUESTION
+// without a "?" describes the line instead ("the most interesting line"); asked
+// whether any line "answers" it, the model says no.
 const (
 	whereQ  = `Which line of the document contains the answer to: "%s"?`
 	existsQ = `Does any line of the document address or answer: "%s"?`
 	existsT = "At least one line of the document states or directly implies the answer"
 	existsF = "No line of the document addresses this"
+
+	whereD   = `Which line of the document best fits this description: "%s"?`
+	existsD  = `Does any line of the document fit this description: "%s"?`
+	existsDT = "At least one line of the document fits the description"
+	existsDF = "No line of the document fits the description"
 )
 
 type opts struct {
@@ -55,13 +63,15 @@ func main() {
 	p.About = `Print the record (line by default) of FILE (or stdin) that best answers
 QUESTION. Unlike grev, which judges every line on its own, pick compares them:
 the model points at the single best line, and a separate yes/no check decides
-whether the input answers QUESTION at all.
+whether the input answers QUESTION at all. A QUESTION without a "?" is taken
+as a description of the line: 'the most interesting line', 'the line that
+names the database host'.
 
 With -e, candidates are the matches of REGEX instead of lines, and pick prints
 the chosen match exactly as it appears (or nothing if none fits).`
 	p.Notes = `Inputs longer than 255 lines are searched in windows, then the best lines of
-every window compete in a final round. A record too large for a request (over
-60 kB) is skipped with a warning.`
+every window compete in a final round. Windows hold about 16k tokens of input;
+a record larger than that is skipped with a warning.`
 	p.ExitStatus = `0 found, 1 nothing answers QUESTION (nothing printed, see --force),
 2 error, 3 found but the choice is uncertain (confidence below --min-conf),
 4 declined at -Q or stopped by --max-cost. With --force the best candidate is
@@ -69,6 +79,7 @@ printed even when the status is 1.`
 	p.Examples = []string{
 		`man rsync | pickv 'how do I exclude a directory?'`,
 		`pickv -m3 -s -n 'where is the retry limit configured?' config.yaml`,
+		`pickv -C2 'the most unusual line' app.log`,
 		`pickv -e '[\w.+-]+@[\w.-]+\.\w+' 'where should receipts be sent?' < mail.eml`,
 		`pickv -e '\$[0-9][0-9,.]*' 'the invoice total' invoice.txt`,
 	}
@@ -105,6 +116,7 @@ printed even when the status is 1.`
 type cand struct {
 	i    int
 	text string
+	tok  float64 // estimated tokens as a document line
 	p    float64
 }
 
@@ -118,6 +130,10 @@ func linesMode(t *cli.Tool, o opts, question, file string, m cli.RecMode) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
+	where, exists, existsYes, existsNo := whereQ, existsQ, existsT, existsF
+	if !strings.HasSuffix(question, "?") {
+		where, exists, existsYes, existsNo = whereD, existsD, existsDT, existsDF
+	}
 	prefix := "L"
 	if m != cli.Lines {
 		prefix = "R"
@@ -126,13 +142,14 @@ func linesMode(t *cli.Tool, o opts, question, file string, m cli.RecMode) {
 	var cands []*cand
 	skipped := map[int]bool{}
 	for i, r := range recs {
+		tok := jev.Tokens(id(i) + "| " + r + "\n")
 		switch {
 		case strings.TrimSpace(r) == "":
-		case len(r) > winBytes:
+		case tok > winTok:
 			skipped[i] = true
-			t.Warnf("skipping record %d: too large for one request (%d bytes)", i+1, len(r))
+			t.Warnf("skipping record %d: too large for one request (≈%d tokens)", i+1, int(tok))
 		default:
-			cands = append(cands, &cand{i: i, text: r})
+			cands = append(cands, &cand{i: i, text: r, tok: tok})
 		}
 	}
 	if len(cands) == 0 {
@@ -151,14 +168,14 @@ func linesMode(t *cli.Tool, o opts, question, file string, m cli.RecMode) {
 	windows := func(cs []*cand) [][]*cand {
 		var out [][]*cand
 		var cur []*cand
-		size := 0
+		size := 0.0
 		for _, c := range cs {
-			if len(cur) > 0 && (len(cur) >= maxOpts || size+len(c.text) > winBytes) {
+			if len(cur) > 0 && (len(cur) >= maxOpts || size+c.tok > winTok) {
 				out = append(out, cur)
 				cur, size = nil, 0
 			}
 			cur = append(cur, c)
-			size += len(c.text) + 8
+			size += c.tok
 		}
 		return append(out, cur)
 	}
@@ -171,74 +188,102 @@ func linesMode(t *cli.Tool, o opts, question, file string, m cli.RecMode) {
 	}
 	e := t.Engine()
 	existsP := 0.0
+	// A window the API still finds too large (the estimate is only an
+	// estimate) is halved and asked again; a single record that doesn't fit
+	// is skipped.
 	round := func(n int, wins [][]*cand) []winResult {
-		res := make([]winResult, len(wins))
-		var items []*jev.Item
-		for w, win := range wins {
-			var b strings.Builder
-			if n == 1 {
-				// The window's full span of records, blank lines included.
-				for i := win[0].i; i <= win[len(win)-1].i; i++ {
-					if strings.TrimSpace(recs[i]) != "" && !skipped[i] {
-						b.WriteString(id(i) + "| " + recs[i])
+		var res []winResult
+		for first := true; len(wins) > 0; first = false {
+			part := make([]winResult, len(wins))
+			var items []*jev.Item
+			for w, win := range wins {
+				var b strings.Builder
+				if n == 1 {
+					// The window's full span of records, blank lines included.
+					for i := win[0].i; i <= win[len(win)-1].i; i++ {
+						if strings.TrimSpace(recs[i]) != "" && !skipped[i] {
+							b.WriteString(id(i) + "| " + recs[i])
+						}
+						b.WriteByte('\n')
 					}
-					b.WriteByte('\n')
+				} else {
+					for _, c := range win {
+						b.WriteString(id(c.i) + "| " + c.text + "\n")
+					}
 				}
-			} else {
+				st := jev.NewState(state(b.String()))
+				var opts jev.Opts
 				for _, c := range win {
-					b.WriteString(id(c.i) + "| " + c.text + "\n")
+					opts = append(opts, jev.Opt{Key: id(c.i)})
 				}
+				items = append(items, jev.NewItem(st, jev.Choice(fmt.Sprintf(where, question), opts), w))
+				if n == 1 {
+					items = append(items, jev.NewItem(st, jev.Noul(fmt.Sprintf(exists, question), existsYes, existsNo), -1-w))
+				}
+				part[w].cands = win
 			}
-			st := jev.NewState(state(b.String()))
-			var opts jev.Opts
-			for _, c := range win {
-				opts = append(opts, jev.Opt{Key: id(c.i)})
-			}
-			items = append(items, jev.NewItem(st, jev.Choice(fmt.Sprintf(whereQ, question), opts), w))
-			if n == 1 {
-				items = append(items, jev.NewItem(st, jev.Noul(fmt.Sprintf(existsQ, question), existsT, existsF), -1-w))
-			}
-			res[w].cands = win
-		}
-		q := e.Plan(items)
-		if n == 1 {
-			if len(wins) > 1 {
-				// Account for the final round in the quote: one request over
-				// the finalists.
-				final := 0
-				for _, win := range wins {
-					for _, c := range win[:min(len(win), keepPerWindow)] {
-						final += len(c.text) + 8
+			q := e.Plan(items)
+			if n == 1 && first {
+				if len(wins) > 1 {
+					// Account for the final round in the quote: one request over
+					// the finalists.
+					final := 0.0
+					for _, win := range wins {
+						for _, c := range win[:min(len(win), keepPerWindow)] {
+							final += c.tok
+						}
 					}
+					q.Requests++
+					q.EstTokens += jev.EstRequest(nil) + int(final) + keepPerWindow*len(wins)*8
 				}
-				q.Requests++
-				q.EstTokens += jev.EstRequest(make([]byte, final)) + keepPerWindow*len(wins)*8
+				t.Confirm(q)
 			}
-			t.Confirm(q)
-		}
-		var firstErr error
-		runErr := e.RunAll(t.Ctx(), items, func(r jev.Result) {
-			if r.Err != nil {
-				if firstErr == nil {
-					firstErr = r.Err
+			tooBig := map[int]bool{}
+			var firstErr error
+			existsW := map[int]float64{}
+			runErr := e.RunAll(t.Ctx(), items, func(r jev.Result) {
+				w := r.Item.Tag.(int)
+				if r.Err != nil {
+					switch {
+					case jev.IsOverLimit(r.Err):
+						tooBig[max(w, -1-w)] = true
+					case firstErr == nil:
+						firstErr = r.Err
+					}
+					return
 				}
-				return
+				if w < 0 {
+					existsW[-1-w] = r.Answer.Noul
+					return
+				}
+				for _, c := range part[w].cands {
+					c.p = r.Answer.Probabilities[id(c.i)]
+				}
+				part[w].conf = r.Answer.Confidence
+			})
+			if runErr == nil {
+				runErr = firstErr
 			}
-			w := r.Item.Tag.(int)
-			if w < 0 {
-				existsP = max(existsP, r.Answer.Noul)
-				return
+			if runErr != nil {
+				t.Exit(t.Finish(runErr))
 			}
-			for _, c := range res[w].cands {
-				c.p = r.Answer.Probabilities[id(c.i)]
+			var again [][]*cand
+			for w, win := range wins {
+				switch {
+				case !tooBig[w]:
+					res = append(res, part[w])
+					existsP = max(existsP, existsW[w])
+				case len(win) > 1:
+					again = append(again, win[:len(win)/2], win[len(win)/2:])
+				default:
+					skipped[win[0].i] = true
+					t.Warnf("skipping record %d: too large for one request", win[0].i+1)
+				}
 			}
-			res[w].conf = r.Answer.Confidence
-		})
-		if runErr == nil {
-			runErr = firstErr
+			wins = again
 		}
-		if runErr != nil {
-			t.Exit(t.Finish(runErr))
+		if len(res) == 0 {
+			t.Fatalf("no record fits in a request")
 		}
 		return res
 	}

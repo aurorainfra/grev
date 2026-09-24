@@ -2,7 +2,6 @@ package jev
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -23,23 +22,12 @@ const (
 	DefaultMaxQ = 128
 )
 
-// Token estimation, calibrated live against reported usage.
+// Request framing, calibrated live against reported usage (jev-1.13.0); the
+// per-character estimate is in text.go.
 const (
-	reqOverhead = 262 // fixed per-request framing (measured on jev-1.13.0)
-	qOverhead   = 7   // per-question framing (measured)
-	bytesPerTok = 3.6
+	reqOverhead = 262 // fixed per-request framing
+	qOverhead   = 7   // per-question framing
 )
-
-func estJSON(v any) int {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return 0
-	}
-	return int(float64(len(b))/bytesPerTok) + 1
-}
-
-// EstText estimates the tokens of a plain string.
-func EstText(s string) int { return int(float64(len(s))/bytesPerTok) + 1 }
 
 // State is a request state shared by the items that point to it. Items with
 // the same *State can share a request; a new *State starts a new request.
@@ -48,8 +36,12 @@ type State struct {
 	est int
 }
 
-// NewState wraps v (string, object or array) as a request state.
-func NewState(v any) *State { return &State{V: v, est: estJSON(v)} }
+// NewState wraps v (string, object or array) as a request state. Its
+// strings are cleaned of escape sequences first (see Clean).
+func NewState(v any) *State {
+	v = sanitize(v)
+	return &State{V: v, est: estJSON(v)}
+}
 
 // Est is the estimated token count of the state.
 func (s *State) Est() int { return s.est }
@@ -64,6 +56,7 @@ type Item struct {
 
 // NewItem builds an item and estimates its size.
 func NewItem(st *State, q Question, tag any) *Item {
+	q.Instructions, q.Criteria = sanitize(q.Instructions), sanitize(q.Criteria)
 	return &Item{State: st, Q: q, Tag: tag, est: qOverhead + estJSON(q)}
 }
 
@@ -333,8 +326,8 @@ func (e *Engine) runBatch(ctx context.Context, b *batch) ([]Result, error) {
 	if len(b.items) == 1 && tooBig(b.items[0]) {
 		e.Sched.Release(0, 0)
 		e.Stats.finish(1, b.est, 1)
-		return failAll(b.items, fmt.Errorf("record too large for one request (≈%d tokens; limit %d)",
-			reqOverhead+b.state.est+b.items[0].est, CtxStateQ)), nil
+		return failAll(b.items, fmt.Errorf("%w: record too large for one request (≈%d tokens; limit %d)",
+			ErrTooLarge, reqOverhead+b.state.est+b.items[0].est, CtxStateQ)), nil
 	}
 
 	req := &Request{State: b.state.V, Model: e.Model, Questions: make(map[string]Question, len(b.items))}
@@ -352,9 +345,11 @@ func (e *Engine) runBatch(ctx context.Context, b *batch) ([]Result, error) {
 			case ae.Status == 401 || ae.Status == 403 || ae.Status == 404:
 				e.Stats.finish(len(b.items), b.est, len(b.items))
 				return failAll(b.items, err), err
-			case ae.Status == 422 && len(b.items) > 1 && overLimit(ae.Body):
+			case IsOverLimit(ae) && len(b.items) > 1:
 				e.Stats.finish(0, b.est, 0) // the rejected request
 				return e.split(ctx, b)
+			case IsOverLimit(ae):
+				err = fmt.Errorf("%w (≈%d tokens estimated): %w", ErrTooLarge, b.est, ae)
 			}
 		}
 		if ctx.Err() != nil {
@@ -410,9 +405,31 @@ func (e *Engine) split(ctx context.Context, b *batch) ([]Result, error) {
 	return res, nil
 }
 
-func overLimit(body string) bool {
-	b := strings.ToLower(body)
-	for _, w := range []string{"token", "context", "too long", "too large", "length", "limit"} {
+// ErrTooLarge marks a question whose request alone the API rejected as over
+// the model's context; the caller has to send less (a smaller window).
+var ErrTooLarge = errors.New("over the model's context")
+
+// IsOverLimit reports whether err is the API rejecting a request as too
+// large: 400 {"error_type":"max_tokens_exceeded"} on jev-1.13, or 413/422
+// with context-length wording.
+func IsOverLimit(err error) bool {
+	if errors.Is(err, ErrTooLarge) {
+		return true
+	}
+	var ae *APIError
+	if !errors.As(err, &ae) {
+		return false
+	}
+	words := []string{"max_tokens", "context"} // a 400 can be any bad request
+	switch ae.Status {
+	case 400:
+	case 413, 422:
+		words = append(words, "token", "too long", "too large", "length", "limit")
+	default:
+		return false
+	}
+	b := strings.ToLower(ae.Body)
+	for _, w := range words {
 		if strings.Contains(b, w) {
 			return true
 		}

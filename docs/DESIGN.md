@@ -15,6 +15,21 @@ Questions in one request are evaluated independently and in parallel, so packing
 into a request changes cost and latency, not answers. A request carries about 262 tokens of framing
 plus about 7 per question, plus the text. Input costs $0.042 per million tokens and output is free.
 
+Text is estimated per character, by class, from a fit on reported usage:
+
+| character | tokens |
+|---|---|
+| letter | 0.24 |
+| digit | 1.26 |
+| punctuation | 0.85 |
+| space, newline | ≈0 |
+| other Unicode | 0.99 |
+
+That makes prose about 4.8 bytes per token and a dense log about 1.9. A flat "bytes ÷ 3.6" was off
+by up to 2.5× on logs. ANSI escape sequences and control characters (except tab and newline) are
+stripped from everything the model reads. They cost tokens and carry no meaning. Output is not
+affected.
+
 Jev can't generate text. The grev tools lean into that and act like classic filters. They
 select, reorder, split, route or annotate input, so **output is input**. Model labels and
 probabilities appear only as explicit columns. There are two deliberate normalizations: CRLF comes
@@ -56,7 +71,10 @@ context budgets:
 - the whole request ≤ 64k tokens
 - the state plus its longest question ≤ 32k
 
-A 15% margin and a per-request question cap (128) keep requests well inside those.
+A 15% margin and a per-request question cap (128) keep requests well inside those. If the API
+still rejects a request as too large (`400 {"error_type":"max_tokens_exceeded"}`), the engine
+splits it in half and retries. A single question that doesn't fit fails with a "too large" error.
+Tools that build windows (pickv) then halve the window and ask again.
 
 A scheduler gates requests:
 - **`-J N`** is a fixed number of requests in flight.
