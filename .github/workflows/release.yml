@@ -20,7 +20,7 @@ jobs:
           go-version-file: go.mod
           cache: false # no dependencies (no go.sum) to cache
       - run: make lint test
-      - uses: sigstore/cosign-installer@v4
+      - uses: sigstore/cosign-installer@v4.1.2 # no floating major tag upstream
       - uses: anchore/sbom-action/download-syft@v0
       - uses: goreleaser/goreleaser-action@v7
         with:
