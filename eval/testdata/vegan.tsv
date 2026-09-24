@@ -1,0 +1,33 @@
+# about: items on a restaurant menu
+# query: is a vegan meal
+# question: Is {} a vegan dish?
+0	grilled ribeye steak with butter
+1	boiled carrots
+0	caesar salad with anchovies
+1	lentil soup with vegetable broth
+0	cheese omelette
+1	roasted chickpeas with paprika
+0	chicken tikka masala
+1	fresh fruit salad
+0	spaghetti carbonara
+1	tofu stir fry with rice
+0	salmon sushi rolls
+1	falafel wrap with tahini
+0	beef burrito with sour cream
+1	black bean chili
+0	shrimp pad thai
+1	vegetable curry with coconut milk
+0	honey glazed ham
+1	guacamole with corn chips
+0	pepperoni pizza
+1	steamed broccoli with garlic
+0	greek yogurt with honey
+1	peanut butter on toast
+0	pork dumplings
+1	mushroom risotto made with olive oil and vegetable stock
+0	fried egg sandwich
+1	hummus and pita bread
+0	clam chowder
+1	oatmeal with almond milk and berries
+0	lamb kebab
+1	grilled portobello burger on a vegan bun

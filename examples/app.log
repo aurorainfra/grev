@@ -1,0 +1,16 @@
+2026-09-24T09:00:01Z INFO  server listening on :8080
+2026-09-24T09:00:05Z INFO  GET /healthz 200 1ms
+2026-09-24T09:00:12Z WARN  slow query: SELECT * FROM orders WHERE customer_id=$1 took 1840ms
+2026-09-24T09:00:13Z INFO  POST /v1/checkout 201 212ms
+2026-09-24T09:00:20Z ERROR payment provider returned 502, retrying (attempt 1/3)
+2026-09-24T09:00:21Z INFO  payment provider ok after retry
+2026-09-24T09:00:34Z ERROR panic: runtime error: invalid memory address or nil pointer dereference [signal SIGSEGV: segmentation violation code=0x1 addr=0x18 pc=0x6a3f2e]
+2026-09-24T09:00:34Z INFO  supervisor: worker 3 exited with status 2, restarting
+2026-09-24T09:00:35Z INFO  server listening on :8080
+2026-09-24T09:00:41Z WARN  cache miss rate 38% over the last minute
+2026-09-24T09:00:50Z ERROR fatal error: concurrent map writes
+2026-09-24T09:00:51Z INFO  supervisor: worker 1 exited with status 2, restarting
+2026-09-24T09:01:02Z INFO  GET /v1/orders 200 18ms
+2026-09-24T09:01:07Z ERROR failed to send receipt email to customer 4411: smtp: 451 temporary failure, will retry
+2026-09-24T09:01:15Z INFO  config reloaded (feature flags: new_checkout=on)
+2026-09-24T09:01:22Z ERROR out of memory: killed process 2231 (worker) total-vm:4198340kB, anon-rss:3981220kB

@@ -1,0 +1,43 @@
+# Maintainer: Aurora Infrastructure EU <oss@aurorainfra.eu>
+#
+# Release package, built from the tagged source tarball. After tagging a new
+# version: bump pkgver, reset pkgrel=1, run `updpkgsums`, then `makepkg -si`.
+
+pkgname=grev
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Unix filters that ask questions instead of matching patterns (grep, test, sort, uniq… on TypeSafe Jev models)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/aurorainfra/grev'
+license=('MIT OR Apache-2.0')
+depends=('glibc')
+makedepends=('go')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP') # replace with the real sum via updpkgsums once v$pkgver is tagged
+
+_goenv() {
+  export CGO_CPPFLAGS="${CPPFLAGS}"
+  export CGO_CFLAGS="${CFLAGS}"
+  export CGO_CXXFLAGS="${CXXFLAGS}"
+  export CGO_LDFLAGS="${LDFLAGS}"
+  export GOFLAGS="-buildmode=pie -trimpath -ldflags=-linkmode=external -mod=readonly -modcacherw"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  _goenv
+  # The Makefile passes its own -ldflags (version stamp), which replaces the
+  # one in GOFLAGS, so repeat -linkmode=external through GO_LDFLAGS.
+  make VERSION="$pkgver" GO_LDFLAGS=-linkmode=external
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  make test # offline: unit tests and CLI tests against a fake API server
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  # install never rebuilds existing binaries, so the build() flags stand.
+  make install DESTDIR="$pkgdir" PREFIX=/usr VERSION="$pkgver"
+}

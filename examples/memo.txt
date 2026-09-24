@@ -1,0 +1,17 @@
+Migration to the new build system
+
+Hi everyone, quick heads up about the build system migration that is
+happening next week. We have been running the new pipeline in shadow
+mode for three weeks and the results look solid, so it is time to
+make the switch for real.
+
+What changes for you
+The old make targets keep working until the end of the month. The new
+entrypoint is a single command that wraps everything, including the
+docs build that used to be separate.
+
+    bun run build
+
+Generated artifacts no longer need to be committed. The new pipeline
+uploads them to the registry automatically, and checking them in
+just creates merge conflicts.

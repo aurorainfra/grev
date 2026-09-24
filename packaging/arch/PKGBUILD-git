@@ -1,0 +1,51 @@
+# Maintainer: Aurora Infrastructure EU <oss@aurorainfra.eu>
+#
+# Development package, built from the latest commit:
+#   makepkg -p PKGBUILD-git -si
+
+pkgname=grev-git
+_pkgname=grev
+pkgver=r0.0000000
+pkgrel=1
+pkgdesc='Unix filters that ask questions instead of matching patterns (development version)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/aurorainfra/grev'
+license=('MIT OR Apache-2.0')
+depends=('glibc')
+makedepends=('go' 'git')
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+source=("$_pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_pkgname"
+  git describe --long --tags --abbrev=7 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+    printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+_goenv() {
+  export CGO_CPPFLAGS="${CPPFLAGS}"
+  export CGO_CFLAGS="${CFLAGS}"
+  export CGO_CXXFLAGS="${CXXFLAGS}"
+  export CGO_LDFLAGS="${LDFLAGS}"
+  export GOFLAGS="-buildmode=pie -trimpath -ldflags=-linkmode=external -mod=readonly -modcacherw"
+}
+
+build() {
+  cd "$_pkgname"
+  _goenv
+  make VERSION="$pkgver" GO_LDFLAGS=-linkmode=external
+}
+
+check() {
+  cd "$_pkgname"
+  make test
+}
+
+package() {
+  cd "$_pkgname"
+  make install DESTDIR="$pkgdir" PREFIX=/usr VERSION="$pkgver"
+  # Arch keeps licences under the package's own name.
+  mv "$pkgdir/usr/share/licenses/$_pkgname" "$pkgdir/usr/share/licenses/$pkgname"
+}

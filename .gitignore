@@ -1,0 +1,27 @@
+# Build outputs
+/bin/
+/dist/
+/man/
+/completions/
+
+# Stray `go build ./cmd/<tool>` binaries in the repo root
+/cutv
+/grev
+/isv
+/jev
+/oneof
+/pickv
+/probev
+/rank
+/seek
+/seg
+/tagv
+/uniqv
+/unwrap
+*.exe
+
+# makepkg work dirs and packages
+/packaging/arch/src/
+/packaging/arch/pkg/
+/packaging/arch/*.tar.gz
+/packaging/arch/*.pkg.tar.*

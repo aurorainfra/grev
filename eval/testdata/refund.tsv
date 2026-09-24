@@ -1,0 +1,23 @@
+# about: messages sent to customer support
+# query: asks for a refund
+# question: Does the message {} ask for a refund?
+1	I was charged twice for order A-104, please refund the duplicate.
+0	How do I reset my password?
+1	The jacket arrived torn. I'd like my money back.
+0	When will my order ship?
+1	Please cancel my subscription and return last month's payment.
+0	Can I change the delivery address for order 5521?
+1	I want a refund for the concert tickets since the show was cancelled.
+0	Do you ship to Canada?
+1	Refund me for the unused portion of my annual plan please.
+0	The app keeps crashing on my phone.
+1	I returned the shoes two weeks ago, where is my reimbursement?
+0	What payment methods do you accept?
+1	You billed me after I cancelled, I expect that charge reversed.
+0	I love the new update, great work!
+1	Can I get my deposit back? I no longer need the rental.
+0	Is there a student discount?
+0	Why was I charged twice?
+0	My invoice shows the wrong company name.
+1	The product doesn't work as advertised, I'd like a full refund.
+0	Can you add a gift note to my order?

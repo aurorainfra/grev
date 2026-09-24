@@ -1,0 +1,23 @@
+# about: lines from application logs
+# query: indicates a network problem
+# question: Does the log line {} indicate a network problem?
+1	ERROR dial tcp 10.0.3.7:5432: connect: connection refused
+0	INFO user alice logged in
+1	WARN request to https://api.stripe.com timed out after 30s
+0	ERROR failed to parse config.yaml: line 12: unexpected key "retries"
+1	ERROR read tcp 172.16.0.4:443: connection reset by peer
+0	DEBUG cache hit for key session:8812
+1	ERROR lookup db.internal on 127.0.0.53:53: no such host
+0	ERROR division by zero in invoice total calculation
+1	WARN TLS handshake timeout with upstream payments.example.com
+0	INFO scheduled job cleanup finished in 2.3s
+1	ERROR i/o timeout while reading from redis:6379
+0	ERROR permission denied opening /var/lib/app/data.db
+1	WARN packet loss 12% on eth0 over the last minute
+0	WARN disk usage at 91% on /dev/sda1
+1	ERROR upstream connect error or disconnect/reset before headers
+0	ERROR nil pointer dereference in handler.ServeHTTP
+1	ERROR network is unreachable: sendto 8.8.8.8
+0	INFO migrated 14 rows in table users
+1	ERROR broken pipe while writing response to client 10.1.2.3
+0	WARN deprecated flag --legacy-mode used

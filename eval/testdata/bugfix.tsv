@@ -1,0 +1,23 @@
+# about: git commit messages
+# query: fixes a bug
+# question: Does the commit message {} describe a bug fix?
+1	fix off-by-one in pagination cursor
+0	add dark mode toggle to settings page
+1	handle nil config when env var is missing
+0	bump lodash from 4.17.20 to 4.17.21
+1	prevent double charge when payment webhook retries
+0	refactor user service into smaller modules
+1	correct timezone conversion for daylight saving transitions
+0	update README with installation steps
+1	resolve crash on startup when cache dir is read-only
+0	add Spanish translations
+1	stop leaking goroutines in the websocket hub
+0	introduce feature flag for new checkout flow
+1	fix race condition in session store
+0	rename variables for clarity
+1	make CSV export escape embedded quotes correctly
+0	add unit tests for the date parser
+1	repair broken link in footer that returned 404
+0	upgrade CI runner to ubuntu 24.04
+1	avoid integer overflow when summing large invoices
+0	implement bulk delete endpoint

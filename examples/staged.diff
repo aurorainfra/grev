@@ -1,0 +1,12 @@
+diff --git a/internal/payments/client.go b/internal/payments/client.go
+index 3f2a1b0..9c8d7e6 100644
+--- a/internal/payments/client.go
++++ b/internal/payments/client.go
+@@ -12,6 +12,8 @@ import (
+ const defaultTimeout = 10 * time.Second
+ 
++const paymentsAPIKey = "pay_prod_7Hq2xK9mVw4Lr8Tn3Zs6Yd1Pc5"
++
+ // Client talks to the payment provider.
+ type Client struct {
+ 	http *http.Client
