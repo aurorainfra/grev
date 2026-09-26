@@ -369,6 +369,9 @@ func models(t *cli.Tool) {
 	for _, m := range ms {
 		fmt.Fprintf(t.Out, "%-14s %-10.10s  %s\n", m.Name, m.ReleaseDate, m.Description)
 	}
+	if len(ms) == 0 {
+		t.Warnf("no Jev models listed by this endpoint; gateways often do not enumerate them, so set the model explicitly (e.g. -M jev-latest)")
+	}
 }
 
 func ask(t *cli.Tool, args []string, stateFile, stateText string, specs []string, asJSON bool) {

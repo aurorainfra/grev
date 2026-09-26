@@ -1,12 +1,15 @@
 package jev
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -246,13 +249,28 @@ func TestPricing(t *testing.T) {
 	if _, ok := PriceOf("gpt-9"); ok {
 		t.Error("unknown model should be unknown")
 	}
+	// Gateways report vendor-prefixed ids ("typesafe/jev-1.13-20260917").
+	for _, m := range []string{"typesafe/jev-1.13-20260917", "openrouter/jev-latest"} {
+		if p, ok := PriceOf(m); !ok || p.In != 0.042 {
+			t.Errorf("PriceOf(%s) = %+v %v", m, p, ok)
+		}
+	}
 	c, ok := Cost("jev-1.13.0", Usage{InputTokens: 1_000_000, OutputTokens: 5000})
 	if !ok || c < 0.0419 || c > 0.0421 {
 		t.Errorf("Cost = %v %v", c, ok)
 	}
+	// A cost reported by the API is what was charged, and beats the table.
+	reported := 0.000012936
+	if c, ok := Cost("typesafe/jev-1.13-20260917", Usage{InputTokens: 308, OutputTokens: 22, Cost: &reported}); !ok || c != reported {
+		t.Errorf("reported cost = %v %v, want %v", c, ok, reported)
+	}
 	t.Setenv("GREV_PRICE_PER_MTOK", "1.5")
 	if p, ok := PriceOf("anything"); !ok || p.In != 1.5 {
 		t.Errorf("override: %+v %v", p, ok)
+	}
+	// The override is explicit, so it also beats a reported cost.
+	if c, ok := Cost("anything", Usage{InputTokens: 1_000_000, Cost: &reported}); !ok || c != 1.5 {
+		t.Errorf("override cost = %v %v", c, ok)
 	}
 }
 
@@ -265,6 +283,43 @@ func TestModelDefault(t *testing.T) {
 	t.Setenv("TYPESAFE_DEFAULT_MODEL", "jev-preview")
 	if Model("") != "jev-preview" || Model("x") != "x" {
 		t.Fatal("TYPESAFE_DEFAULT_MODEL")
+	}
+}
+
+// TestModelsShapes covers the shapes GET /v1/models comes in: System One,
+// bare array, and the OpenAI-compatible one gateways such as OpenRouter serve,
+// where only the Jev models are of any use to these tools.
+func TestModelsShapes(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want []string
+	}{
+		{"systemone", `{"models":[{"name":"jev-latest"}]}`, []string{"jev-latest"}},
+		{"bare array", `[{"name":"jev-latest"}]`, []string{"jev-latest"}},
+		{"openai gateway", `{"data":[
+			{"id":"typesafe/jev-router","name":"TypeSafe: Jev Router","created":1790363560},
+			{"id":"openai/gpt-4o","name":"GPT-4o"},
+			{"id":"jev-preview","name":"Jev Preview"}]}`, []string{"jev-preview"}},
+	}
+	for _, tc := range cases {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(tc.body))
+		}))
+		c := &Client{BaseURL: srv.URL, Key: "k", HTTP: srv.Client()}
+		cards, err := c.Models(context.Background())
+		srv.Close()
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		var names []string
+		for _, m := range cards {
+			names = append(names, m.Name)
+		}
+		if !slices.Equal(names, tc.want) {
+			t.Errorf("%s: names = %v, want %v", tc.name, names, tc.want)
+		}
 	}
 }
 
