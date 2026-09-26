@@ -134,6 +134,10 @@ func (a Answer) MarshalJSON() ([]byte, error) {
 type Usage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
+	// Cost is the charge reported by the API in USD, when the provider sends
+	// one (OpenRouter and other gateways do; TypeSafe does not). It is nil
+	// otherwise, and the local price table is used instead.
+	Cost *float64 `json:"cost,omitempty"`
 }
 
 // Response is the body returned by POST /v1/systemone.
