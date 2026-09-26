@@ -121,7 +121,12 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 	return &resp, nil
 }
 
-// Models lists the model names the account can use.
+// Models lists the model names the account can use. It accepts the System One
+// shape ({"models":[…]}), a bare array, and the OpenAI-compatible shape
+// ({"data":[…]}) served by gateways such as OpenRouter. From an OpenAI-shaped
+// list only the Jev models are kept: those are the ones the System One
+// endpoint can answer with, and a gateway's full list is mostly chat models
+// that would only mislead.
 func (c *Client) Models(ctx context.Context) ([]ModelCard, error) {
 	out, err := c.call(ctx, http.MethodGet, "/v1/models", nil)
 	if err != nil {
@@ -130,15 +135,53 @@ func (c *Client) Models(ctx context.Context) ([]ModelCard, error) {
 	var resp struct {
 		Models []ModelCard `json:"models"`
 	}
-	if err := json.Unmarshal(out, &resp); err != nil {
-		// Some deployments return a bare array.
-		var arr []ModelCard
-		if json.Unmarshal(out, &arr) == nil {
-			return arr, nil
-		}
-		return nil, fmt.Errorf("decoding models: %w", err)
+	if err := json.Unmarshal(out, &resp); err == nil && resp.Models != nil {
+		return resp.Models, nil
 	}
-	return resp.Models, nil
+	var arr []ModelCard
+	if json.Unmarshal(out, &arr) == nil {
+		return arr, nil
+	}
+	var openai struct {
+		Data []struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Created     int64  `json:"created"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(out, &openai); err != nil || openai.Data == nil {
+		return nil, fmt.Errorf("decoding models: unrecognized response shape")
+	}
+	var cards []ModelCard
+	for _, m := range openai.Data {
+		if !knownJevModel(m.ID) {
+			continue
+		}
+		card := ModelCard{Name: m.ID, Description: m.Name}
+		if m.Description != "" {
+			card.Description = m.Description
+		}
+		if m.Created > 0 {
+			card.ReleaseDate = time.Unix(m.Created, 0).UTC().Format("2006-01-02")
+		}
+		cards = append(cards, card)
+	}
+	return cards, nil
+}
+
+// knownJevModel reports whether id names a Jev model the price table knows,
+// which is what makes it addressable through System One. An OpenAI-shaped
+// list belongs to the gateway's chat surface instead: OpenRouter lists
+// "typesafe/jev-router" there, and posting that to /v1/systemone answers
+// "Model typesafe/jev-router does not exist".
+func knownJevModel(id string) bool {
+	for _, m := range modelIDs(id) {
+		if _, ok := priceOf(m); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // Raw sends body to path and returns the raw response body.

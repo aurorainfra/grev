@@ -39,6 +39,18 @@ var prices = map[string]Price{
 // [model "…"] config section. Call it before any request is made.
 func SetPrice(model string, p Price) { prices[model] = p }
 
+// modelIDs lists the ids to try when pricing a model: the id as reported,
+// then the part after any provider prefix, so a gateway reporting
+// "typesafe/jev-1.13-20260917" still finds the "jev-1.13" entry.
+func modelIDs(model string) []string {
+	if i := strings.LastIndex(model, "/"); i >= 0 && i+1 < len(model) {
+		if tail := model[i+1:]; tail != model {
+			return []string{model, tail}
+		}
+	}
+	return []string{model}
+}
+
 // PriceOf returns the price of model; GREV_PRICE_PER_MTOK overrides the input
 // price. ok is false for unknown models.
 func PriceOf(model string) (p Price, ok bool) {
@@ -47,6 +59,16 @@ func PriceOf(model string) (p Price, ok bool) {
 			return Price{In: f}, true
 		}
 	}
+	for _, id := range modelIDs(model) {
+		if p, ok = priceOf(id); ok {
+			return p, true
+		}
+	}
+	return Price{}, false
+}
+
+// priceOf matches one id against the table by longest prefix.
+func priceOf(model string) (p Price, ok bool) {
 	best := -1
 	for prefix, pr := range prices {
 		if strings.HasPrefix(model, prefix) && len(prefix) > best {
@@ -56,8 +78,14 @@ func PriceOf(model string) (p Price, ok bool) {
 	return p, best >= 0
 }
 
-// Cost is the USD cost of a request's usage under model's price.
+// Cost is the USD cost of a request's usage. A cost reported by the API wins,
+// since it is what was actually charged; otherwise it is computed from the
+// price table for model. GREV_PRICE_PER_MTOK, being an explicit override,
+// beats the reported cost.
 func Cost(model string, u Usage) (float64, bool) {
+	if u.Cost != nil && os.Getenv("GREV_PRICE_PER_MTOK") == "" {
+		return *u.Cost, true
+	}
 	p, ok := PriceOf(model)
 	return (float64(u.InputTokens)*p.In + float64(u.OutputTokens)*p.Out) / 1e6, ok
 }
