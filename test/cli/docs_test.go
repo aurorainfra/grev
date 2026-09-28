@@ -33,7 +33,7 @@ func TestDocs(t *testing.T) {
 	}
 	for _, tool := range cli.Tools {
 		r := run(t, env, "", tool.Name, "--help-man")
-		if r.Code != 0 || !strings.Contains(r.Stdout, ".TH "+strings.ToUpper(tool.Name)+" 1 2001-09-09") ||
+		if r.Code != 0 || !strings.Contains(r.Stdout, ".TH "+strings.ReplaceAll(strings.ToUpper(tool.Name), "-", `\-`)+" 1 2001-09-09") ||
 			!strings.Contains(r.Stdout, ".SH EXAMPLES") || !strings.Contains(r.Stdout, ".SH EXIT STATUS") {
 			t.Errorf("%s --help-man: %+v", tool.Name, r)
 			continue
@@ -61,14 +61,14 @@ func TestDocs(t *testing.T) {
 		}
 	}
 	for _, page := range []string{"config", "tools"} {
-		r := run(t, env, "", "jev", "--help-man="+page)
+		r := run(t, env, "", "grev-settings", "--help-man="+page)
 		if r.Code != 0 || !strings.Contains(r.Stdout, ".TH ") {
-			t.Errorf("jev --help-man=%s: %+v", page, r)
+			t.Errorf("grev-settings --help-man=%s: %+v", page, r)
 			continue
 		}
 		lint(page, r.Stdout)
 	}
-	if r := run(t, env, "", "jev", "--help-man=nope"); r.Code != 2 {
+	if r := run(t, env, "", "grev-settings", "--help-man=nope"); r.Code != 2 {
 		t.Errorf("unknown page: %+v", r)
 	}
 	if r := run(t, env, "", "grev", "--help-completion=tcsh"); r.Code != 2 {

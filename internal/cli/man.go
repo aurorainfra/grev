@@ -13,8 +13,8 @@ import (
 )
 
 // Man pages are generated from the same metadata as --help, so the two never
-// drift: `TOOL --help-man` writes TOOL(1); `jev --help-man=config` writes
-// grevconfig(5) from the config schema and `jev --help-man=tools` writes the
+// drift: `TOOL --help-man` writes TOOL(1); `grev-settings --help-man=config` writes
+// grevconfig(5) from the config schema and `grev-settings --help-man=tools` writes the
 // grev-tools(7) overview.
 
 // manDate is SOURCE_DATE_EPOCH (for reproducible builds) or today, UTC.
@@ -88,7 +88,7 @@ func esc(s string) string {
 				optWord = true
 			}
 		}
-		b.WriteString(escRune(r, optWord))
+		b.WriteString(escRune(r, optWord || bold)) // code spans are literal: - is a minus
 	}
 	if bold {
 		b.WriteString(`\fR`)
@@ -353,7 +353,7 @@ func manFiles(w io.Writer) {
 	fmt.Fprintln(w, ".SH FILES")
 	tp(w, `\fI~/.grevconfig\fR`, "Per-user configuration (git-config style); see grevconfig(5).")
 	tp(w, `\fI$XDG_CONFIG_HOME/grev/config\fR`, "Alternative location, read before ~/.grevconfig (%AppData%\\grev\\config on Windows).")
-	tp(w, `\fI$XDG_STATE_HOME/grev/spend\fR`, "The spend ledger behind jev spend and the limits.daily/limits.monthly caps "+
+	tp(w, `\fI$XDG_STATE_HOME/grev/spend\fR`, "The spend ledger behind `grev-settings spend` and the limits.daily/limits.monthly caps "+
 		"(~/.local/state/grev/spend by default; %LocalAppData%\\grev\\spend on Windows).")
 }
 
@@ -383,13 +383,13 @@ func manSeeAlso(w io.Writer, self string) {
 // ---- grevconfig(5) ----
 
 func configMan(w io.Writer, date, ver string) {
-	th(w, "grevconfig", 5, date, ver, "jev --help-man=config")
+	th(w, "grevconfig", 5, date, ver, "grev-settings --help-man=config")
 	fmt.Fprintln(w, ".SH NAME\ngrevconfig \\- configuration file of the grev tools")
 	fmt.Fprintln(w, ".SH SYNOPSIS\n.nf\n\\fI~/.grevconfig\\fR\n\\fI$XDG_CONFIG_HOME/grev/config\\fR\n.fi")
 	fmt.Fprintln(w, ".SH DESCRIPTION")
 	text(w, `The grev tools read their API key, endpoint, model, default options and spend limits from a
 git-config style file. It is optional: without it, the tools use environment variables and built-in defaults.
-Edit it by hand, or with `+"`jev config set NAME VALUE`"+`, which keeps comments and layout.`, esc)
+Edit it by hand, or with `+"`grev-settings config set NAME VALUE`"+`, which keeps comments and layout.`, esc)
 	fmt.Fprintln(w, ".SS Syntax")
 	text(w, `The file consists of sections. A section starts with a header in brackets, [section], or
 [section "subsection"] for sections that take a name. Each following line is key = value.
@@ -404,7 +404,7 @@ than once, the last value wins.`, esc)
 	fmt.Fprintln(w, ".SS Locations")
 	text(w, `$XDG_CONFIG_HOME/grev/config (default ~/.config/grev/config; %AppData%\grev\config on Windows)
 is read first, then ~/.grevconfig, whose values win. GREV_CONFIG=PATH reads only PATH; set
-but empty, no config is read at all. jev config set writes to ~/.grevconfig unless only the
+but empty, no config is read at all. `+"`grev-settings config set`"+` writes to ~/.grevconfig unless only the
 XDG file exists. There is deliberately no per-project config file: a cloned repository could
 otherwise redirect the API endpoint and collect your key.`, esc)
 	fmt.Fprintln(w, ".SS Precedence")
@@ -451,7 +451,7 @@ cost. Then, in order:`, esc)
 	}
 	fmt.Fprintln(w, ".PP")
 	text(w, `Spend is always recorded in the ledger ($XDG_STATE_HOME/grev/spend), per day and tool,
-so jev spend works from the first run; the caps are only enforced when set. Several tools
+so `+"`grev-settings spend`"+` works from the first run; the caps are only enforced when set. Several tools
 running at once can overshoot a cap by the requests they already have in flight. Limits need
 the model's price: for a model the built-in table doesn't know, add [model "ID"] price.`, esc)
 
@@ -459,7 +459,7 @@ the model's price: for a model the built-in table doesn't know, add [model "ID"]
 	fmt.Fprintln(w, ".SH EXAMPLES\n.RS 4\n.nf")
 	for _, l := range strings.Split(`# ~/.grevconfig
 [api]
-	key = tsk-...                  ; written by jev key set (mode 0600); or keyCommand = pass show typesafe
+	key = tsk-...                  ; written by grev-settings key set (mode 0600); or keyCommand = pass show typesafe
 
 [defaults]
 	progress = auto                ; the -p overlay whenever stderr is a terminal
@@ -482,11 +482,11 @@ the model's price: for a model the built-in table doesn't know, add [model "ID"]
 	text(w, "The same settings from the command line:", esc)
 	fmt.Fprintln(w, ".RS 4\n.nf")
 	for _, l := range []string{
-		"jev key set",
-		"jev config set defaults.progress auto",
-		"jev config set limits.daily 5",
-		"jev config set tool.grev.about 'application logs'",
-		"jev config list \\-\\-show-origin",
+		"grev-settings key set",
+		"grev-settings config set defaults.progress auto",
+		"grev-settings config set limits.daily 5",
+		"grev-settings config set tool.grev.about 'application logs'",
+		"grev-settings config list \\-\\-show-origin",
 	} {
 		fmt.Fprintln(w, safe(escCode(strings.ReplaceAll(l, `\-`, "-"))))
 	}
@@ -497,7 +497,7 @@ the model's price: for a model the built-in table doesn't know, add [model "ID"]
 // ---- grev-tools(7) ----
 
 func toolsMan(w io.Writer, date, ver string) {
-	th(w, "grev-tools", 7, date, ver, "jev --help-man=tools")
+	th(w, "grev-tools", 7, date, ver, "grev-settings --help-man=tools")
 	fmt.Fprintln(w, ".SH NAME\ngrev\\-tools \\- Unix filters that ask a model instead of matching patterns")
 	fmt.Fprintln(w, ".SH DESCRIPTION")
 	text(w, `The grev tools are small Unix filters built on TypeSafe's System One models (Jev), which
@@ -536,7 +536,7 @@ and -M MODEL; see any tool's page for details, and grevconfig(5) for setting def
 	fmt.Fprintln(w, ".SH COST")
 	text(w, `Input tokens cost 0.042 USD per million with jev-1.13; output is free. A request carries
 about 260 tokens of framing, plus about 7 per question, plus the text itself: grev over a
-4,300-line source file is about 200k tokens, under a cent. jev spend shows what was spent
+4,300-line source file is about 200k tokens, under a cent. `+"`grev-settings spend`"+` shows what was spent
 today and this month.`, esc)
 	fmt.Fprintln(w, ".SH EXIT STATUS")
 	for _, e := range [][2]string{

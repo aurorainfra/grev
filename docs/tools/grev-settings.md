@@ -1,9 +1,10 @@
-# jev
+# grev-settings
 
 **Plumbing and admin.** Configure the tools, manage the API key, check spend, and ask the
 model questions directly.
 
-The other tools each do one thing to a stream of records. `jev` does everything around them:
+The other tools each do one thing to a stream of records. `grev-settings` does everything
+around them:
 - `config` edits `~/.grevconfig`
 - `key` stores and checks the API key
 - `spend` reads the local spend ledger
@@ -14,18 +15,18 @@ The other tools each do one thing to a stream of records. `jev` does everything 
 ## Example: first-time setup
 
 ```console
-$ jev key set
+$ grev-settings key set
 TypeSafe API key (input hidden):
 stored key …a1b2 as api.key in /home/you/.grevconfig (mode 0600)
-$ jev key status
+$ grev-settings key status
 source: api.key (~/.grevconfig:2)
 file:   /home/you/.grevconfig
 key:    …a1b2 (108 chars)
 check:  ok (2 models available)
-$ jev config set defaults.progress auto
-$ jev config set limits.daily 5
-$ jev config set tool.grev.about 'application logs'
-$ jev config list --show-origin
+$ grev-settings config set defaults.progress auto
+$ grev-settings config set limits.daily 5
+$ grev-settings config set tool.grev.about 'application logs'
+$ grev-settings config list --show-origin
 ~/.grevconfig:2	defaults.progress=auto
 ~/.grevconfig:5	limits.daily=5
 ~/.grevconfig:8	tool.grev.about=application logs
@@ -46,7 +47,7 @@ Ask the model directly. This is handy for trying out a question before using it 
 
 ```console
 $ echo 'I was charged twice for order A-104, please refund the duplicate.' |
-    jev ask -q 'refund: asks for a refund' \
+    grev-settings ask -q 'refund: asks for a refund' \
             -q 'dept: Which team should handle it? [billing|tech|sales]' \
             -q 'mood: How upset is the writer? <calm|annoyed|angry>'
 refund  noul    0.99
@@ -57,15 +58,15 @@ mood    score   0.26 (conf 0.61)  0:calm 0.74 · 1:annoyed 0.26 · 2:angry 0.00
 Check what the tools have spent, by tool and by day, against the caps:
 
 ```console
-$ jev spend --days 3
+$ grev-settings spend --days 3
 today       2026-09-24  $0.0023  (cap $5)
 this month  2026-09     $0.0023  (no cap)
 
 this month by tool:
-  seek     $0.0015
-  probev   $0.0004
-  cutv     $0.0003
-  jev      $0.0000
+  seek          $0.0015
+  probev        $0.0004
+  cutv          $0.0003
+  grev-settings $0.0000
 
 last 3 days:
   2026-09-22  $0.0000
@@ -80,14 +81,14 @@ including the token usage the API reports:
 
 ```console
 $ echo '{"state": "The deploy failed: permission denied writing /var/www",
-         "questions": {"perm": {"type": "noul", "instructions": "Is this a permissions problem?"}}}' | jev raw
+         "questions": {"perm": {"type": "noul", "instructions": "Is this a permissions problem?"}}}' | grev-settings raw
 {"model":"jev-1.13.0","answers":{"perm":{"type":"noul","noul":0.98}},"usage":{"input_tokens":282,"output_tokens":20}}
 ```
 
 List the models your key can use:
 
 ```console
-$ jev models
+$ grev-settings models
 jev-latest     2026-09-10  The latest iteration of TypeSafe's System One Model: Jev
 jev-preview    2026-09-10  A preview version of `jev-latest`: should be better in most ways
 ```
@@ -95,9 +96,9 @@ jev-preview    2026-09-10  A preview version of `jev-latest`: should be better i
 A typo in a config name is flagged, not silently used:
 
 ```console
-$ jev config set limits.montly 50
-jev: warning: limits.montly is not a known config key (see grevconfig(5))
-$ jev config unset limits.montly
+$ grev-settings config set limits.montly 50
+grev-settings: warning: limits.montly is not a known config key (see grevconfig(5))
+$ grev-settings config unset limits.montly
 ```
 
 ## Commands
@@ -114,8 +115,8 @@ $ jev config unset limits.montly
 | `raw [FILE]` | POST a request JSON as-is and print the response |
 
 SPEC is the same mini-syntax as [probev](probev.md): `name: question`, `[a|b|c]` for a
-Choice, `<lo|mid|hi>` for a Score. See `jev --help`, `man jev`, and `man grevconfig` for every
-config key.
+Choice, `<lo|mid|hi>` for a Score. See `grev-settings --help`, `man grev-settings`, and
+`man grevconfig` for every config key.
 
 ## Exit status
 

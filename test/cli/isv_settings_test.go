@@ -66,7 +66,7 @@ func TestIs(t *testing.T) {
 
 func TestJevAskRawModels(t *testing.T) {
 	_, env := fake(t, jevtest.Options{})
-	r := run(t, env, "", "jev", "ask", "--state", "p=0.42 about billing",
+	r := run(t, env, "", "grev-settings", "ask", "--state", "p=0.42 about billing",
 		"-q", "x: is it", "-q", "dept: which team [sales|billing]", "-q", "lvl: how much <lo|mid|hi>")
 	if r.Code != 0 {
 		t.Fatalf("ask: %+v", r)
@@ -80,19 +80,19 @@ func TestJevAskRawModels(t *testing.T) {
 	}
 	noLeak(t, r, testKey)
 
-	r = run(t, env, "yes from stdin", "jev", "ask", "--json", "-q", "a: q?")
+	r = run(t, env, "yes from stdin", "grev-settings", "ask", "--json", "-q", "a: q?")
 	var got map[string]map[string]any
 	if r.Code != 0 || json.Unmarshal([]byte(r.Stdout), &got) != nil || got["a"]["noul"] != 0.95 {
 		t.Fatalf("ask --json: %+v", r)
 	}
-	if r := run(t, env, "x", "jev", "ask"); r.Code != 2 {
+	if r := run(t, env, "x", "grev-settings", "ask"); r.Code != 2 {
 		t.Fatalf("ask without -q: %+v", r)
 	}
-	if r := run(t, env, "x", "jev", "ask", "-q", "a: q", "-q", "a: again"); r.Code != 2 {
+	if r := run(t, env, "x", "grev-settings", "ask", "-q", "a: q", "-q", "a: again"); r.Code != 2 {
 		t.Fatalf("duplicate names: %+v", r)
 	}
 
-	r = run(t, env, `{"state":"yes","questions":{"a":{"type":"noul","instructions":"q?"}}}`, "jev", "raw")
+	r = run(t, env, `{"state":"yes","questions":{"a":{"type":"noul","instructions":"q?"}}}`, "grev-settings", "raw")
 	var resp struct {
 		Model   string                    `json:"model"`
 		Answers map[string]map[string]any `json:"answers"`
@@ -101,21 +101,21 @@ func TestJevAskRawModels(t *testing.T) {
 	if r.Code != 0 || json.Unmarshal([]byte(r.Stdout), &resp) != nil || resp.Answers["a"]["noul"] != 0.95 || resp.Model == "" {
 		t.Fatalf("raw: %+v", r)
 	}
-	if r := run(t, env, "not json", "jev", "raw"); r.Code != 2 {
+	if r := run(t, env, "not json", "grev-settings", "raw"); r.Code != 2 {
 		t.Fatalf("raw with bad JSON: %+v", r)
 	}
-	r = run(t, env, `{"state":"x","questions":{"a":{"type":"bogus"}}}`, "jev", "raw")
+	r = run(t, env, `{"state":"x","questions":{"a":{"type":"bogus"}}}`, "grev-settings", "raw")
 	if r.Code != 0 && r.Code != 2 {
 		t.Fatalf("raw bogus: %+v", r)
 	}
 
-	r = run(t, env, "", "jev", "models")
+	r = run(t, env, "", "grev-settings", "models")
 	if r.Code != 0 || !strings.Contains(r.Stdout, "jev-latest") || !strings.Contains(r.Stdout, "2026-09-10") {
 		t.Fatalf("models: %+v", r)
 	}
 	for _, args := range [][]string{{}, {"nope"}, {"key"}, {"key", "frob"}} {
-		if r := run(t, env, "", "jev", args...); r.Code != 2 {
-			t.Errorf("jev %q: want usage error, got %+v", args, r)
+		if r := run(t, env, "", "grev-settings", args...); r.Code != 2 {
+			t.Errorf("grev-settings %q: want usage error, got %+v", args, r)
 		}
 	}
 }
@@ -133,17 +133,17 @@ func TestJevKey(t *testing.T) {
 	keyPath := filepath.Join(home, ".grevconfig") // key set stores api.key in the config
 
 	// No key anywhere yet.
-	r := run(t, env, "", "jev", "key", "status", "--no-check")
+	r := run(t, env, "", "grev-settings", "key", "status", "--no-check")
 	if r.Code != 2 || !strings.Contains(r.Stderr, "no API key") {
 		t.Fatalf("status without key: %+v", r)
 	}
-	r = run(t, env, "", "jev", "key", "path")
+	r = run(t, env, "", "grev-settings", "key", "path")
 	if r.Code != 0 || strings.TrimSpace(r.Stdout) != keyPath {
 		t.Fatalf("key path = %q, want %q", r.Stdout, keyPath)
 	}
 
 	// key set from a pipe: verified against the server, stored 0600.
-	r = run(t, env, "  "+key+"\n", "jev", "key", "set")
+	r = run(t, env, "  "+key+"\n", "grev-settings", "key", "set")
 	if r.Code != 0 || !strings.Contains(r.Stderr, "…7d6c5b4a"[len("…7d6c"):]) {
 		t.Fatalf("key set: %+v", r)
 	}
@@ -155,14 +155,14 @@ func TestJevKey(t *testing.T) {
 	if b, _ := os.ReadFile(keyPath); !strings.Contains(string(b), "key = "+key) {
 		t.Fatal("stored key differs")
 	}
-	if r := run(t, env, "wrong-key-xyz\n", "jev", "key", "set"); r.Code != 2 || !strings.Contains(r.Stderr, "check failed") {
+	if r := run(t, env, "wrong-key-xyz\n", "grev-settings", "key", "set"); r.Code != 2 || !strings.Contains(r.Stderr, "check failed") {
 		t.Fatalf("a key the server rejects should not be stored: %+v", r)
 	}
 	if b, _ := os.ReadFile(keyPath); !strings.Contains(string(b), "key = "+key) {
 		t.Fatal("a rejected key overwrote the stored one")
 	}
 
-	r = run(t, env, "", "jev", "key", "status")
+	r = run(t, env, "", "grev-settings", "key", "status")
 	if r.Code != 0 || !strings.Contains(r.Stdout, "source: api.key (~/.grevconfig:2)") ||
 		!strings.Contains(r.Stdout, "key:    …5b4a") || !strings.Contains(r.Stdout, "check:  ok (2 models") {
 		t.Fatalf("status from config: %+v", r)
@@ -171,7 +171,7 @@ func TestJevKey(t *testing.T) {
 
 	// A config holding the key with loose permissions: works, warns, never prints the key.
 	os.Chmod(keyPath, 0o644)
-	r = run(t, env, "", "jev", "key", "status", "--no-check")
+	r = run(t, env, "", "grev-settings", "key", "status", "--no-check")
 	if r.Code != 0 || unixPerms && !strings.Contains(r.Stdout, "chmod 600") {
 		t.Fatalf("status with a loose config: %+v", r)
 	}
@@ -187,23 +187,23 @@ func TestJevKey(t *testing.T) {
 	// config): status fails the check without leaking.
 	bad := filepath.Join(t.TempDir(), "bad")
 	os.WriteFile(bad, []byte("tsk-bad-key-000111\n"), 0o600)
-	r = run(t, append(env, "TYPESAFE_API_KEY_FILE="+bad), "", "jev", "key", "status")
+	r = run(t, append(env, "TYPESAFE_API_KEY_FILE="+bad), "", "grev-settings", "key", "status")
 	if r.Code != 1 || !strings.Contains(r.Stdout, "source: TYPESAFE_API_KEY_FILE") || !strings.Contains(r.Stdout, "FAILED") {
 		t.Fatalf("status with bad key: %+v", r)
 	}
 	noLeak(t, r, "tsk-bad-key-000111")
 
-	r = run(t, env, "", "jev", "key", "rm")
+	r = run(t, env, "", "grev-settings", "key", "rm")
 	if b, _ := os.ReadFile(keyPath); r.Code != 0 || strings.Contains(string(b), key) {
 		t.Fatalf("key rm: %+v", r)
 	}
-	if r := run(t, env, "", "jev", "key", "rm"); r.Code != 1 {
+	if r := run(t, env, "", "grev-settings", "key", "rm"); r.Code != 1 {
 		t.Fatalf("key rm with no key: %+v", r)
 	}
 
 	// key import: adopt the key from the environment into the config.
 	kf := writeFile(t, t.TempDir(), "env.key", key+"\n")
-	r = run(t, append(env, "TYPESAFE_API_KEY_FILE="+kf), "", "jev", "key", "import")
+	r = run(t, append(env, "TYPESAFE_API_KEY_FILE="+kf), "", "grev-settings", "key", "import")
 	if r.Code != 0 || !strings.Contains(r.Stderr, "importing") || !strings.Contains(r.Stderr, "delete "+kf) {
 		t.Fatalf("key import: %+v", r)
 	}
@@ -214,11 +214,11 @@ func TestJevKey(t *testing.T) {
 	if fi, _ := os.Stat(keyPath); !modeIs(fi, 0o600) {
 		t.Fatalf("config mode after import: %v", fi.Mode())
 	}
-	if r := run(t, env, "", "jev", "key", "import"); r.Code != 2 || !strings.Contains(r.Stderr, "nothing to import") {
+	if r := run(t, env, "", "grev-settings", "key", "import"); r.Code != 2 || !strings.Contains(r.Stderr, "nothing to import") {
 		t.Fatalf("import with nothing in the environment: %+v", r)
 	}
 	// The removed options are gone.
-	if r := run(t, env, "", "jev", "key", "set", "--file", kf); r.Code != 2 {
+	if r := run(t, env, "", "grev-settings", "key", "set", "--file", kf); r.Code != 2 {
 		t.Fatalf("--file should be gone: %+v", r)
 	}
 	if r := run(t, env, "yes", "isv", "--key-file", kf, "q"); r.Code != 2 {

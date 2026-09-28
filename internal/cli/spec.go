@@ -9,7 +9,7 @@ import (
 	"github.com/aurorainfra/grev/internal/jev"
 )
 
-// Spec is one named question from the probe/jev-ask mini-syntax:
+// Spec is one named question from the probev/grev-settings-ask mini-syntax:
 //
 //	name: question            → Noul
 //	name: question [a|b|c]    → Choice (options may be a=description)

@@ -1,4 +1,4 @@
-// Command jev is the plumbing and admin tool of the grev family: manage the
+// Command grev-settings is the plumbing and admin tool of the grev family: manage the
 // API key, list models, ask one-off questions, and send raw requests.
 package main
 
@@ -20,8 +20,8 @@ import (
 )
 
 func main() {
-	t := cli.New("jev")
-	t.TolerateBadConfig = true // so `jev config edit` can fix a broken file
+	t := cli.New("grev-settings")
+	t.TolerateBadConfig = true // so `grev-settings config edit` can fix a broken file
 	p := t.P
 	p.Commands = []string{"config", "key", "spend", "models", "ask", "raw"}
 	p.Synopsis = []string{
@@ -59,12 +59,12 @@ precedence, in that order.`
 	p.ExitStatus = `0 ok, 1 key check failed or config key not found, 2 error,
 4 declined or over a spend limit, 130 interrupted.`
 	p.Examples = []string{
-		`jev key set`,
-		`jev config set api.keyCommand 'pass show typesafe/api'`,
-		`jev config set limits.daily 5`,
-		`jev config list --show-origin`,
-		`jev spend`,
-		`echo 'I was charged twice' | jev ask -q 'refund: asks for a refund' -q 'dept: team? [billing|tech]'`,
+		`grev-settings key set`,
+		`grev-settings config set api.keyCommand 'pass show typesafe/api'`,
+		`grev-settings config set limits.daily 5`,
+		`grev-settings config list --show-origin`,
+		`grev-settings spend`,
+		`echo 'I was charged twice' | grev-settings ask -q 'refund: asks for a refund' -q 'dept: team? [billing|tech]'`,
 	}
 	stateFile := p.Str('S', "state-file", "FILE", "", "ask: read the state from FILE")
 	stateText := p.Str(0, "state", "TEXT", "", "ask: use TEXT as the state")
@@ -83,7 +83,7 @@ precedence, in that order.`
 		configCmd(t, args[1:], *showOrigin, *showSecret)
 	case "key":
 		if len(args) != 2 {
-			p.Usagef("usage: jev key set|import|status|path|rm")
+			p.Usagef("usage: grev-settings key set|import|status|path|rm")
 		}
 		keyCmd(t, args[1], !*noCheck)
 	case "spend":
@@ -102,7 +102,7 @@ precedence, in that order.`
 
 func configCmd(t *cli.Tool, args []string, showOrigin, showSecret bool) {
 	if len(args) == 0 {
-		t.P.Usagef("usage: jev config list|get|set|unset|edit|path")
+		t.P.Usagef("usage: grev-settings config list|get|set|unset|edit|path")
 	}
 	cfg := t.Config()
 	mask := func(v config.Value) string {
@@ -113,7 +113,7 @@ func configCmd(t *cli.Tool, args []string, showOrigin, showSecret bool) {
 	}
 	want := func(n int) {
 		if len(args) != n {
-			t.P.Usagef("usage: jev config %s", map[string]string{
+			t.P.Usagef("usage: grev-settings config %s", map[string]string{
 				"get": "get NAME", "set": "set NAME VALUE", "unset": "unset NAME"}[args[0]])
 		}
 	}
@@ -294,7 +294,7 @@ func storeKey(t *cli.Tool, check bool, path, key string) {
 }
 
 func verify(t *cli.Tool, key string) (int, error) {
-	c := jev.NewClient(key, cli.UserAgent("jev"))
+	c := jev.NewClient(key, cli.UserAgent("grev-settings"))
 	if os.Getenv("TYPESAFE_BASE_URL") == "" {
 		if ep := t.Config().Str("api", "", "endpoint"); ep != "" {
 			c.BaseURL = strings.TrimRight(ep, "/")
@@ -347,9 +347,13 @@ func spend(t *cli.Tool, days int) {
 			tools = append(tools, k)
 		}
 		sort.Slice(tools, func(i, j int) bool { return byTool[tools[i]] > byTool[tools[j]] })
+		width := 8
+		for _, k := range tools {
+			width = max(width, len(k))
+		}
 		fmt.Fprintln(out, "\nthis month by tool:")
 		for _, k := range tools {
-			fmt.Fprintf(out, "  %-8s $%.4f\n", k, byTool[k])
+			fmt.Fprintf(out, "  %-*s $%.4f\n", width, k, byTool[k])
 		}
 	}
 	fmt.Fprintf(out, "\nlast %d days:\n", days)

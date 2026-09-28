@@ -40,7 +40,7 @@ builds:
   - { <<: *build, id: lookv, main: ./cmd/lookv, binary: lookv }
   - { <<: *build, id: trv, main: ./cmd/trv, binary: trv }
   - { <<: *build, id: sortv, main: ./cmd/sortv, binary: sortv }
-  - { <<: *build, id: jev, main: ./cmd/jev, binary: jev }
+  - { <<: *build, id: grev-settings, main: ./cmd/grev-settings, binary: grev-settings }
 
 archives:
   - id: default

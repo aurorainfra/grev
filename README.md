@@ -71,7 +71,7 @@ probev -H -q 'refund: asks for money back' -q 'angry: the writer is angry' < exa
 | [`trv`](docs/tools/trv.md) | tr, sed | translate, delete, squeeze or replace only where an instruction applies |
 | [`lookv`](docs/tools/lookv.md) | look, git bisect | find where an ordered input's answer flips, in a few rounds |
 | [`probev`](docs/tools/probev.md) | awk | print per-record probability columns |
-| [`jev`](docs/tools/jev.md) | — | config, API key, spend, models, one-off and raw requests |
+| [`grev-settings`](docs/tools/grev-settings.md) | — | config, API key, spend, models, one-off and raw requests |
 
 Every tool has `--help` and a man page. The common flags:
 
@@ -94,12 +94,12 @@ Every tool has `--help` and a man page. The common flags:
 ## Configure
 
 Everything lives in one file, `~/.grevconfig`, in git-config style; the full reference is
-[`docs/CONFIG.md`](docs/CONFIG.md) (or `man grevconfig`). `jev key set` puts your
+[`docs/CONFIG.md`](docs/CONFIG.md) (or `man grevconfig`). `grev-settings key set` puts your
 [API key](https://console.typesafe.ai/keys) there with mode 0600:
 
 ```ini
 [api]
-	key = tsk-…                           ; written by `jev key set`
+	key = tsk-…                           ; written by `grev-settings key set`
 [defaults]
 	progress = auto                       ; the -p overlay whenever stderr is a terminal
 	jobs = max
@@ -115,9 +115,10 @@ Everything lives in one file, `~/.grevconfig`, in git-config style; the full ref
 Thresholds are set per tool because `-t` means different things: P(yes) in `grev`, the minimum
 confidence of a choice in `tagv`, a path score in `seek`.
 
-Manage it with `jev config set limits.daily 5` or `jev config list --show-origin`, and check
-your spend with `jev spend`. Command-line flags beat environment variables, which beat the
-config. In CI, `TYPESAFE_API_KEY` supplies the key without any file.
+Manage it with `grev-settings config set limits.daily 5` or
+`grev-settings config list --show-origin`, and check your spend with `grev-settings spend`.
+Command-line flags beat environment variables, which beat the config. In CI, `TYPESAFE_API_KEY`
+supplies the key without any file.
 
 ## Cost and safety
 

@@ -1,13 +1,13 @@
 # Configuration
 
 Every key, with its type and default, is in the man page generated from the schema:
-`man grevconfig`, or `jev --help-man=config | man -l -` from a source checkout.
+`man grevconfig`, or `grev-settings --help-man=config | man -l -` from a source checkout.
 
 ## Files
 
 - **Global config:** the tools read `${XDG_CONFIG_HOME:-~/.config}/grev/config`, then
   `~/.grevconfig`; later values win. On Windows the first is `%AppData%\grev\config`.
-  `jev config set` writes to `~/.grevconfig`, unless only the XDG file exists.
+  `grev-settings config set` writes to `~/.grevconfig`, unless only the XDG file exists.
 - **`GREV_CONFIG=PATH`** uses that file instead of both. `GREV_CONFIG=` (empty) turns config off.
 - **`[include] path = FILE`** reads another file, relative to the including one. Use it to keep
   secrets out of a dotfiles repo.
@@ -27,7 +27,7 @@ It is a subset of git-config:
 
 Mistakes are reported with `file:line`:
 - unknown keys and bad values: a warning
-- syntax errors: an error (exit 2), except in `jev config`, so a broken file can still be fixed
+- syntax errors: an error (exit 2), except in `grev-settings config`, so a broken file can still be fixed
 
 ## Precedence
 
@@ -38,7 +38,7 @@ the pinned `jev-1.13.0`. Boolean options can be switched off for one run with `-
 
 ## The API key
 
-The key lives in `~/.grevconfig` like everything else. `jev key set` stores it as `api.key` and
+The key lives in `~/.grevconfig` like everything else. `grev-settings key set` stores it as `api.key` and
 keeps the file at mode 0600; the tools warn if it's readable by anyone else. With a password
 manager, set `api.keyCommand` instead (e.g. `pass show typesafe/api`), and the key is never
 written to disk.
@@ -49,7 +49,7 @@ in this order:
 2. `TYPESAFE_API_KEY_FILE`: a file holding it (Docker/Kubernetes secrets).
 3. `$CREDENTIALS_DIRECTORY/typesafe_api_key`: systemd `LoadCredential=`.
 
-`jev key import` moves a key from those variables into `~/.grevconfig`. `jev key status` shows
+`grev-settings key import` moves a key from those variables into `~/.grevconfig`. `grev-settings key status` shows
 which source is in use, masked, and checks that it works.
 
 ## Examples
@@ -103,5 +103,5 @@ A model the built-in price table doesn't know yet:
 
 Every request adds its cost to a local ledger at `${XDG_STATE_HOME:-~/.local/state}/grev/spend`
 (`%LocalAppData%\grev\spend` on Windows). Set `GREV_LEDGER` to move it; set it empty to turn it
-off, which also turns the caps off. `jev spend` shows today's and this month's spend by tool,
+off, which also turns the caps off. `grev-settings spend` shows today's and this month's spend by tool,
 against `limits.daily` and `limits.monthly`.

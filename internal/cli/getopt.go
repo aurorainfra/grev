@@ -19,7 +19,7 @@ type Parser struct {
 	Notes      string   // free text printed after the options
 	ExitStatus string   // exit status description (without the "Exit status:" label)
 	Examples   []string // shell examples; continuation lines are indented
-	Commands   []string // subcommands offered by shell completion (jev)
+	Commands   []string // subcommands offered by shell completion (grev-settings)
 	opts       []*opt
 	seen       map[*opt]bool
 }

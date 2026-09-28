@@ -187,7 +187,7 @@ func TestGrevParallelAndPacking(t *testing.T) {
 func TestGrevErrors(t *testing.T) {
 	_, env := fake(t, jevtest.Options{Key: "other-key"}, "TYPESAFE_API_KEY=wrong-key-123")
 	r := run(t, env, fruits, "grev", "q")
-	if r.Code != 2 || !strings.Contains(r.Stderr, "401") || !strings.Contains(r.Stderr, "jev key status") {
+	if r.Code != 2 || !strings.Contains(r.Stderr, "401") || !strings.Contains(r.Stderr, "grev-settings key status") {
 		t.Fatalf("bad key: %+v", r)
 	}
 	noLeak(t, r, "wrong-key-123")

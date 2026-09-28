@@ -55,9 +55,9 @@ func TestConfigWarningsAndErrors(t *testing.T) {
 	if r := run(t, env, fruits, "grev", "q"); r.Code != 2 || !strings.Contains(r.Stderr, "~/.grevconfig:1: missing ]") {
 		t.Fatalf("syntax error: %+v", r)
 	}
-	// jev config still works with a broken file, so it can be fixed.
-	if r := run(t, env, "", "jev", "config", "path"); r.Code != 0 || !strings.HasSuffix(strings.TrimSpace(r.Stdout), ".grevconfig") {
-		t.Fatalf("jev config path with a broken config: %+v", r)
+	// grev-settings config still works with a broken file, so it can be fixed.
+	if r := run(t, env, "", "grev-settings", "config", "path"); r.Code != 0 || !strings.HasSuffix(strings.TrimSpace(r.Stdout), ".grevconfig") {
+		t.Fatalf("grev-settings config path with a broken config: %+v", r)
 	}
 	writeConfig(t, env, "[tool \"grev\"]\n\tmodel = x\n")
 	if r := run(t, env, fruits, "grev", "q"); r.Code != 0 || !strings.Contains(r.Stderr, "use [api]") {
@@ -73,7 +73,7 @@ func TestConfigAPIKeyEndpointModel(t *testing.T) {
 	if log := srv.Log(); len(log) == 0 || log[len(log)-1].Model != "jev-test-9" {
 		t.Fatalf("model from config: %+v", log)
 	}
-	r := run(t, env, "", "jev", "key", "status", "--no-check")
+	r := run(t, env, "", "grev-settings", "key", "status", "--no-check")
 	if r.Code != 0 || !strings.Contains(r.Stdout, "source: api.key (~/.grevconfig:2)") {
 		t.Fatalf("key status: %+v", r)
 	}
@@ -128,10 +128,10 @@ func TestSpendCapsAndLedger(t *testing.T) {
 	// Spend something, then look at the ledger.
 	expect(t, run(t, env, fruits, "grev", "q"), 0, "apple yes\ncherry yes\n")
 	expect(t, run(t, env, fruits, "rank", "q"), 0, "apple yes\ncherry yes\nbanana no\n")
-	r := run(t, env, "", "jev", "spend", "--days", "2")
+	r := run(t, env, "", "grev-settings", "spend", "--days", "2")
 	if r.Code != 0 || !strings.Contains(r.Stdout, "today") || !strings.Contains(r.Stdout, "grev") ||
 		!strings.Contains(r.Stdout, "rank") || !strings.Contains(r.Stdout, "no cap") {
-		t.Fatalf("jev spend: %+v", r)
+		t.Fatalf("grev-settings spend: %+v", r)
 	}
 	// A daily cap already used up refuses the next run up front.
 	writeConfig(t, env, "[limits]\n\tdaily = 0.0000000001\n")
@@ -158,40 +158,40 @@ func TestJevConfigCommands(t *testing.T) {
 		{"config", "set", "tool.grev.about", "app logs"},
 		{"config", "set", "model.jev-1.14.0.price", "0.05"},
 	} {
-		if r := run(t, env, "", "jev", args...); r.Code != 0 {
-			t.Fatalf("jev %v: %+v", args, r)
+		if r := run(t, env, "", "grev-settings", args...); r.Code != 0 {
+			t.Fatalf("grev-settings %v: %+v", args, r)
 		}
 	}
-	if r := run(t, env, "", "jev", "config", "set", "limits.daily", "lots"); r.Code != 2 {
+	if r := run(t, env, "", "grev-settings", "config", "set", "limits.daily", "lots"); r.Code != 2 {
 		t.Fatalf("bad value should be refused: %+v", r)
 	}
 	if fi, _ := os.Stat(p); !modeIs(fi, 0o600) {
 		t.Fatalf("config mode %v", fi.Mode())
 	}
-	r := run(t, env, "", "jev", "config", "get", "tool.grev.about")
+	r := run(t, env, "", "grev-settings", "config", "get", "tool.grev.about")
 	if r.Code != 0 || r.Stdout != "app logs\n" {
 		t.Fatalf("get: %+v", r)
 	}
-	if r := run(t, env, "", "jev", "config", "get", "limits.monthly"); r.Code != 1 {
+	if r := run(t, env, "", "grev-settings", "config", "get", "limits.monthly"); r.Code != 1 {
 		t.Fatalf("get missing: %+v", r)
 	}
-	r = run(t, env, "", "jev", "config", "list", "--show-origin")
+	r = run(t, env, "", "grev-settings", "config", "list", "--show-origin")
 	for _, want := range []string{"~/.grevconfig:2\tapi.keycommand=pass show typesafe", "limits.daily=5", "tool.grev.about=app logs", "model.jev-1.14.0.price=0.05"} {
 		if !strings.Contains(r.Stdout, want) {
 			t.Fatalf("list missing %q:\n%s", want, r.Stdout)
 		}
 	}
-	if r := run(t, env, "", "jev", "config", "unset", "limits.daily"); r.Code != 0 {
+	if r := run(t, env, "", "grev-settings", "config", "unset", "limits.daily"); r.Code != 0 {
 		t.Fatalf("unset: %+v", r)
 	}
-	if r := run(t, env, "", "jev", "config", "unset", "limits.daily"); r.Code != 1 {
+	if r := run(t, env, "", "grev-settings", "config", "unset", "limits.daily"); r.Code != 1 {
 		t.Fatalf("unset missing: %+v", r)
 	}
 	// api.key is masked unless asked for.
-	run(t, env, "", "jev", "config", "set", "api.key", testKey)
-	r = run(t, env, "", "jev", "config", "list")
+	run(t, env, "", "grev-settings", "config", "set", "api.key", testKey)
+	r = run(t, env, "", "grev-settings", "config", "list")
 	noLeak(t, r, testKey)
-	if r := run(t, env, "", "jev", "config", "get", "api.key", "--show-secret"); r.Stdout != testKey+"\n" {
+	if r := run(t, env, "", "grev-settings", "config", "get", "api.key", "--show-secret"); r.Stdout != testKey+"\n" {
 		t.Fatalf("--show-secret: %+v", r)
 	}
 }

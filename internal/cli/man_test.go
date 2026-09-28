@@ -50,8 +50,8 @@ func groffLint(t *testing.T, page []byte) {
 }
 
 func TestEsc(t *testing.T) {
-	got := esc("use --max-cost, `jev spend`, a\\b, 1…2, re-run and limits.daily")
-	for _, want := range []string{`\%\-\-max\-cost,`, `\fBjev spend\fR`, `\%a\eb`, `1\[u2026]2`, `re-run`, `\%limits.daily`} {
+	got := esc("use --max-cost, `grev-settings spend`, a\\b, 1…2, re-run and limits.daily")
+	for _, want := range []string{`\%\-\-max\-cost,`, `\fBgrev\-settings spend\fR`, `\%a\eb`, `1\[u2026]2`, `re-run`, `\%limits.daily`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("esc: missing %q in %q", want, got)
 		}

@@ -58,8 +58,8 @@ man: $(STAMP)
 		$(BIN)/$$t --help-man > man/$$t.1; \
 		gzip -n -9 -f man/$$t.1; \
 	done
-	@$(BIN)/jev --help-man=config > man/grevconfig.5 && gzip -n -9 -f man/grevconfig.5
-	@$(BIN)/jev --help-man=tools > man/grev-tools.7 && gzip -n -9 -f man/grev-tools.7
+	@$(BIN)/grev-settings --help-man=config > man/grevconfig.5 && gzip -n -9 -f man/grevconfig.5
+	@$(BIN)/grev-settings --help-man=tools > man/grev-tools.7 && gzip -n -9 -f man/grev-tools.7
 	@echo "man pages: $$(ls man | wc -l) in man/"
 
 # Shell completions, also generated from the tools (hidden --help-completion).

@@ -82,7 +82,7 @@ func (e *APIError) Error() string {
 		s += " (request-id " + e.RequestID + ")"
 	}
 	if e.Status == http.StatusUnauthorized || e.Status == http.StatusForbidden {
-		s += "; check credentials with `jev key status`"
+		s += "; check credentials with `grev-settings key status`"
 	}
 	return s
 }

@@ -46,7 +46,7 @@ type KeyConfig struct {
 }
 
 // ErrNoKey means no source provided a key.
-var ErrNoKey = errors.New("no API key: run `jev key set` to store one in ~/.grevconfig")
+var ErrNoKey = errors.New("no API key: run `grev-settings key set` to store one in ~/.grevconfig")
 
 // LoadKey resolves the API key: TYPESAFE_API_KEY, TYPESAFE_API_KEY_FILE, a
 // systemd credential (for CI, containers and services), then the config

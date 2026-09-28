@@ -1,7 +1,7 @@
 //go:build live
 
 // Package live runs the tools against the real API with your key: from
-// ~/.grevconfig (as set by `jev key set`), or TYPESAFE_API_KEY /
+// ~/.grevconfig (as set by `grev-settings key set`), or TYPESAFE_API_KEY /
 // TYPESAFE_API_KEY_FILE in CI. It skips when there is none. Every call is
 // capped with --max-cost, spend goes to a throwaway ledger, and the key is
 // only ever read by the tools.
@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 		}
 	}
 	if keyEnv == "" {
-		fmt.Println("live tests skipped: no API key (run `jev key set`, or set TYPESAFE_API_KEY)")
+		fmt.Println("live tests skipped: no API key (run `grev-settings key set`, or set TYPESAFE_API_KEY)")
 		os.Exit(0)
 	}
 	code := m.Run()
@@ -106,11 +106,11 @@ func TestLiveIsSecret(t *testing.T) {
 }
 
 func TestLiveJev(t *testing.T) {
-	r := run(t, "", "jev", "key", "status")
+	r := run(t, "", "grev-settings", "key", "status")
 	if r.Code != 0 || !strings.Contains(r.Stdout, "check:  ok") {
 		t.Fatalf("key status: exit %d\n%s\n%s", r.Code, r.Stdout, r.Stderr)
 	}
-	r = run(t, "I was charged twice for my order, please refund me!", "jev", "ask",
+	r = run(t, "I was charged twice for my order, please refund me!", "grev-settings", "ask",
 		"-q", "refund: The customer asks for a refund",
 		"-q", "team: Which team should handle this? [billing|technical|sales]")
 	if r.Code != 0 || !strings.Contains(r.Stdout, "refund  noul") || !strings.Contains(r.Stdout, "team    choice  billing") {

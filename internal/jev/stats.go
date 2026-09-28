@@ -155,7 +155,7 @@ func (st *Stats) committedCost(model string, est int) float64 {
 	return st.s.Cost + float64(st.s.EstFly+est)*st.s.Ratio()*p.In/1e6
 }
 
-// Record accounts a request sent outside Run (e.g. jev raw).
+// Record accounts a request sent outside Run (e.g. grev-settings raw).
 func (st *Stats) Record(model string, u Usage, questions int) {
 	cost, known := Cost(model, u)
 	st.mu.Lock()

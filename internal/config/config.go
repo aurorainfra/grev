@@ -139,7 +139,7 @@ func ReadPaths() []string {
 	return out
 }
 
-// WritePath is where `jev config set` writes: GREV_CONFIG if set, else
+// WritePath is where `grev-settings config set` writes: GREV_CONFIG if set, else
 // ~/.grevconfig unless only the XDG file exists (git's rule).
 func WritePath() string {
 	if p, ok := os.LookupEnv("GREV_CONFIG"); ok && p != "" {

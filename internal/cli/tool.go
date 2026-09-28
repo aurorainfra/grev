@@ -63,7 +63,7 @@ type Tool struct {
 	P    *Parser
 	Out  *Out
 
-	// TolerateBadConfig lets a tool run with a broken config file (jev
+	// TolerateBadConfig lets a tool run with a broken config file (grev-settings
 	// config, so it can be fixed). Set before Parse.
 	TolerateBadConfig bool
 

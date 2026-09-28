@@ -364,7 +364,7 @@ func TestAPIError(t *testing.T) {
 		t.Errorf("422: %s", s)
 	}
 	s = (&APIError{Status: 401, Body: `{"detail":"invalid key"}`}).Error()
-	if !strings.Contains(s, "jev key status") {
+	if !strings.Contains(s, "grev-settings key status") {
 		t.Errorf("401 should hint at credentials: %s", s)
 	}
 	s = (&APIError{Status: 500, Body: strings.Repeat("x", 1000)}).Error()

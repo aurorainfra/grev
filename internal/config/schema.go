@@ -16,10 +16,10 @@ type Key struct {
 	Doc     string
 }
 
-// Schema lists every known key. It drives validation, `jev config` help and
+// Schema lists every known key. It drives validation, `grev-settings config` help and
 // the grevconfig(5) man page.
 var Schema = []Key{
-	{"api", "", "key", "string", "", "The API key. `jev key set` stores it here and keeps the file mode 0600."},
+	{"api", "", "key", "string", "", "The API key. `grev-settings key set` stores it here and keeps the file mode 0600."},
 	{"api", "", "keyCommand", "command", "", "Instead of api.key: run this command and use its standard output as the key (sh -c; cmd /C on Windows), e.g. `pass show typesafe/api`."},
 	{"api", "", "endpoint", "string", "https://api.typesafe.ai", "API root. TYPESAFE_BASE_URL overrides it."},
 	{"api", "", "model", "string", "jev-1.13.0", "Model id. -M and TYPESAFE_DEFAULT_MODEL override it."},
@@ -116,5 +116,5 @@ func checkType(k Key, raw string) error {
 	return nil
 }
 
-// CheckValue validates a value for key k (used by `jev config set`).
+// CheckValue validates a value for key k (used by `grev-settings config set`).
 func CheckValue(k Key, raw string) error { return checkType(k, raw) }
