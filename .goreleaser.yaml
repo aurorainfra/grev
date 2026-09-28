@@ -55,7 +55,8 @@ archives:
       - LICENSE-APACHE
       - man/*
       - completions/**/*
-      # The agent skill, beside the binaries: `grev-settings skill install` links to it.
+      # The agent skill, for reading or manual installs. `grev-settings skill install`
+      # copies its embedded twin: archives get deleted, so it never links here.
       - skills/grev/*
 
 nfpms:

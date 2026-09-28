@@ -48,6 +48,19 @@ func TestTargets(t *testing.T) {
 	}
 }
 
+func TestPackagedDirs(t *testing.T) {
+	dirs := PackagedDirs(filepath.FromSlash("/opt/grev/bin/grev-settings"))
+	want := filepath.Join(filepath.FromSlash("/opt/grev/bin"), "..", "share", "grev", "skills", "grev")
+	if dirs[len(dirs)-1] != want {
+		t.Fatalf("PREFIX/share candidate missing: %v", dirs)
+	}
+	for _, d := range dirs {
+		if strings.Contains(d, filepath.Join("bin", "skills")) {
+			t.Fatalf("a release archive's skills/ must be copied, not linked: %v", dirs)
+		}
+	}
+}
+
 func TestInstallCopyUpdateUninstall(t *testing.T) {
 	s := testSkill(t)
 	dir := filepath.Join(t.TempDir(), ".claude", "skills", "grev")

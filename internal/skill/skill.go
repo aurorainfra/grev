@@ -93,8 +93,10 @@ func claudeManagedDir() string {
 	return "/etc/claude-code"
 }
 
-// PackagedDirs are where a package may have installed the skill, most
-// stable first. exe is this binary's path (or "").
+// PackagedDirs are where a package or `make install` may have installed the
+// skill, most stable first. exe is this binary's path (or ""). A release
+// archive's skills/ directory is deliberately not one of them: archives are
+// unpacked anywhere and deleted, which would leave agents a broken link.
 func PackagedDirs(exe string) []string {
 	dirs := []string{
 		"/usr/share/grev/skills/grev",
@@ -104,9 +106,7 @@ func PackagedDirs(exe string) []string {
 	}
 	if exe != "" {
 		bin := filepath.Dir(exe)
-		dirs = append(dirs,
-			filepath.Join(bin, "..", "share", "grev", "skills", "grev"), // PREFIX/bin → PREFIX/share
-			filepath.Join(bin, "skills", "grev"))                        // release archive layout
+		dirs = append(dirs, filepath.Join(bin, "..", "share", "grev", "skills", "grev")) // PREFIX/bin → PREFIX/share
 	}
 	return dirs
 }
