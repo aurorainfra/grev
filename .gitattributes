@@ -1,0 +1,4 @@
+# The agent skill is embedded in grev-settings and shipped in packages;
+# `grev-settings skill install` links to the packaged copy only when its bytes
+# match the embedded one, so every checkout (Windows included) must keep LF.
+skills/** text eol=lf

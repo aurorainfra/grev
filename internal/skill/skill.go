@@ -166,7 +166,8 @@ func ours(dir string) bool {
 	if err != nil {
 		return false
 	}
-	fm, _, ok := strings.Cut(strings.TrimPrefix(string(b), "---\n"), "\n---")
+	text := strings.ReplaceAll(string(b), "\r\n", "\n") // edited or copied on Windows
+	fm, _, ok := strings.Cut(strings.TrimPrefix(text, "---\n"), "\n---")
 	return ok && strings.Contains("\n"+fm+"\n", "\nname: "+Name+"\n") && strings.Contains(fm, Source)
 }
 

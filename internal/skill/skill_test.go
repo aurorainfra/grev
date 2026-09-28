@@ -116,6 +116,14 @@ func TestForeignSkillIsKept(t *testing.T) {
 	}
 }
 
+func TestOursToleratesCRLF(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(strings.ReplaceAll(body, "\n", "\r\n")), 0o644)
+	if !ours(dir) {
+		t.Fatal("a CRLF copy of our skill is not recognised")
+	}
+}
+
 func TestInstallLinksToPackagedCopy(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("copies on Windows")
@@ -163,6 +171,9 @@ func TestShippedSkill(t *testing.T) {
 	b, err := fs.ReadFile(skills.FS, "grev/SKILL.md")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "\r") {
+		t.Fatal("SKILL.md has CR line endings; .gitattributes should keep skills/ at LF")
 	}
 	text := string(b)
 	if !strings.HasPrefix(text, "---\n") {
