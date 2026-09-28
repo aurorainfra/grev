@@ -1,12 +1,15 @@
 // Command grev-settings is the plumbing and admin tool of the grev family: manage the
-// API key, list models, ask one-off questions, and send raw requests.
+// config and API key, check spend, install the agent skill, list models, ask
+// one-off questions, and send raw requests.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"runtime"
@@ -17,17 +20,20 @@ import (
 	"github.com/aurorainfra/grev/internal/cli"
 	"github.com/aurorainfra/grev/internal/config"
 	"github.com/aurorainfra/grev/internal/jev"
+	"github.com/aurorainfra/grev/internal/skill"
+	"github.com/aurorainfra/grev/skills"
 )
 
 func main() {
 	t := cli.New("grev-settings")
 	t.TolerateBadConfig = true // so `grev-settings config edit` can fix a broken file
 	p := t.P
-	p.Commands = []string{"config", "key", "spend", "models", "ask", "raw"}
+	p.Commands = []string{"config", "key", "spend", "skill", "models", "ask", "raw"}
 	p.Synopsis = []string{
 		"config list [--show-origin] | get NAME | set NAME VALUE | unset NAME | edit | path",
 		"key set | import | status | path | rm",
 		"spend [--days N]",
+		"skill install | uninstall | status | show [--project | --system] [--agent all|claude|agents]",
 		"models",
 		"ask [-S FILE | --state TEXT] -q SPEC... [FILE]",
 		"raw [FILE]",
@@ -42,6 +48,12 @@ func main() {
   key path    print the config file that key set writes to
   key rm      remove api.key / api.keyCommand from the config
   spend       show today's and this month's spend against the caps, by tool
+  skill install
+              teach coding agents to use these tools: install the grev skill
+              in ~/.claude/skills (Claude Code) and ~/.agents/skills (Codex,
+              Gemini CLI, Copilot, Cursor, OpenCode, Goose, Amp)
+  skill uninstall, status, show
+              remove it, check it is current, or print it
   models      list the models your key can use
   ask         ask SPEC questions about FILE or stdin, print the answers
   raw         POST a request JSON (FILE or stdin) as-is, print the response JSON`
@@ -55,8 +67,18 @@ defaults.progress, limits.daily, tool.grev.about, model.jev-1.14.0.price.
 The key lives in ~/.grevconfig (api.key, mode 0600, or api.keyCommand for a
 password manager). For CI, containers and services, TYPESAFE_API_KEY,
 TYPESAFE_API_KEY_FILE and $CREDENTIALS_DIRECTORY/typesafe_api_key take
-precedence, in that order.`
-	p.ExitStatus = `0 ok, 1 key check failed or config key not found, 2 error,
+precedence, in that order.
+
+skill install links to the copy a package installed under share/grev/skills
+when it matches this version, so package upgrades update the skill; otherwise
+(or with --copy) it copies the files, and running it again after an upgrade
+refreshes them. --project installs into .claude/skills and .agents/skills of
+the current directory; --system into the directories every user's agents read
+(Claude Code's managed settings directory and /etc/codex/skills), as root. A
+different skill named grev is never overwritten without --force, and even
+then it is moved aside, not deleted.`
+	p.ExitStatus = `0 ok, 1 key check failed, config key not found, or skill status found
+the skill missing or outdated somewhere, 2 error,
 4 declined or over a spend limit, 130 interrupted.`
 	p.Examples = []string{
 		`grev-settings key set`,
@@ -64,6 +86,8 @@ precedence, in that order.`
 		`grev-settings config set limits.daily 5`,
 		`grev-settings config list --show-origin`,
 		`grev-settings spend`,
+		`grev-settings skill install`,
+		`grev-settings skill status --project`,
 		`echo 'I was charged twice' | grev-settings ask -q 'refund: asks for a refund' -q 'dept: team? [billing|tech]'`,
 	}
 	stateFile := p.Str('S', "state-file", "FILE", "", "ask: read the state from FILE")
@@ -74,6 +98,11 @@ precedence, in that order.`
 	showOrigin := p.Flag(0, "show-origin", "config list: show file:line of every value")
 	showSecret := p.Flag(0, "show-secret", "config list/get: show api.key unmasked")
 	days := p.Int(0, "days", "N", 7, "spend: show the last N days (default 7)")
+	project := p.Flag(0, "project", "skill: use the current directory's .claude/ and .agents/ instead of your home")
+	system := p.Flag(0, "system", "skill: use the admin directories every user's agents read (needs root)")
+	agent := p.Str(0, "agent", "all|claude|agents", "all", "skill: Claude Code's directory, the cross-agent one, or both (default all)")
+	copyOnly := p.Flag(0, "copy", "skill install: copy the files even when a packaged copy could be linked")
+	force := p.Flag(0, "force", "skill install: move a different skill named grev aside instead of stopping")
 	args := t.Parse()
 	if len(args) == 0 {
 		p.Usagef("missing command")
@@ -88,6 +117,8 @@ precedence, in that order.`
 		keyCmd(t, args[1], !*noCheck)
 	case "spend":
 		spend(t, *days)
+	case "skill":
+		skillCmd(t, args[1:], *project, *system, *agent, *copyOnly, *force)
 	case "models":
 		models(t)
 	case "ask":
@@ -514,5 +545,119 @@ func raw(t *cli.Tool, args []string) {
 	t.Out.Write(out)
 	if len(out) > 0 && out[len(out)-1] != '\n' {
 		t.Out.WriteString("\n")
+	}
+}
+
+// skillCmd installs, removes, checks or prints the grev agent skill.
+func skillCmd(t *cli.Tool, args []string, project, system bool, agent string, copyOnly, force bool) {
+	if len(args) != 1 {
+		t.P.Usagef("usage: grev-settings skill install|uninstall|status|show [--project|--system] [--agent all|claude|agents]")
+	}
+	files, err := fs.Sub(skills.FS, skill.Name)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if args[0] == "show" {
+		b, _ := fs.ReadFile(files, "SKILL.md")
+		t.Output().WriteString(string(b))
+		return
+	}
+	if project && system {
+		t.P.Usagef("--project and --system are exclusive")
+	}
+	home, _ := os.UserHomeDir()
+	scope, base := skill.User, home
+	switch {
+	case project:
+		scope = skill.Project
+		if base, err = os.Getwd(); err != nil {
+			t.Fatalf("%v", err)
+		}
+	case system:
+		scope = skill.System
+	}
+	targets, err := skill.Targets(scope, agent, base)
+	if err != nil {
+		t.P.Usagef("--agent: %v", err)
+	}
+	exe, _ := os.Executable()
+	s := skill.Skill{FS: files, Packaged: skill.PackagedDirs(exe), NoLink: copyOnly}
+	show := func(p string) string {
+		if home != "" && (p == home || strings.HasPrefix(p, home+string(os.PathSeparator))) {
+			return "~" + p[len(home):]
+		}
+		return p
+	}
+	failed := false
+	fail := func(err error) {
+		failed = true
+		if system && errors.Is(err, fs.ErrPermission) {
+			err = fmt.Errorf("%w (--system needs root)", err)
+		}
+		t.Warnf("%v", err)
+	}
+	out := t.Output()
+	switch args[0] {
+	case "install":
+		for _, tg := range targets {
+			r, err := s.Install(tg, force)
+			if err != nil {
+				fail(err)
+				continue
+			}
+			verb := map[skill.State]string{skill.Missing: "installed", skill.Current: "up to date", skill.Outdated: "updated",
+				skill.Broken: "repaired", skill.Foreign: "installed"}[r.Was]
+			how := ""
+			if r.Link != "" {
+				how = " → " + show(r.Link)
+			}
+			fmt.Fprintf(out, "%-10s %s%s  (%s)\n", verb, show(tg.Dir), how, tg.For)
+			if r.Backup != "" {
+				fmt.Fprintf(out, "%-10s the skill that was there is now %s\n", "", show(r.Backup))
+			}
+		}
+		if !failed {
+			out.Flush()
+			t.Warnf("agents pick the skill up in new sessions; check with `grev-settings skill status`")
+		}
+	case "uninstall":
+		for _, tg := range targets {
+			switch ok, err := s.Uninstall(tg); {
+			case err != nil:
+				fail(err)
+			case ok:
+				fmt.Fprintf(out, "removed    %s\n", show(tg.Dir))
+			default:
+				fmt.Fprintf(out, "absent     %s\n", show(tg.Dir))
+			}
+		}
+	case "status":
+		allCurrent := true
+		for _, tg := range targets {
+			st, link := s.Status(tg.Dir)
+			if st != skill.Current {
+				allCurrent = false
+			}
+			how := ""
+			switch {
+			case link != "":
+				how = " → " + show(link)
+			case st == skill.Current || st == skill.Outdated:
+				how = " (copy)"
+			}
+			fmt.Fprintf(out, "%-13s %s%s  (%s)\n", st, show(tg.Dir), how, tg.For)
+		}
+		if failed {
+			t.Exit(cli.ExitError)
+		}
+		if !allCurrent {
+			t.Exit(cli.ExitNo)
+		}
+		return
+	default:
+		t.P.Usagef("unknown skill command %q: want install, uninstall, status or show", args[0])
+	}
+	if failed {
+		t.Exit(cli.ExitError)
 	}
 }

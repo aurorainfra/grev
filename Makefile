@@ -79,7 +79,8 @@ install: $(STAMP) man completions
 		$(DESTDIR)$(DATADIR)/zsh/site-functions \
 		$(DESTDIR)$(DATADIR)/fish/vendor_completions.d \
 		$(DESTDIR)$(DATADIR)/licenses/grev \
-		$(DESTDIR)$(DATADIR)/doc/grev
+		$(DESTDIR)$(DATADIR)/doc/grev \
+		$(DESTDIR)$(DATADIR)/grev/skills/grev
 	install -m 0755 $(addprefix $(BIN)/,$(CMDS)) $(DESTDIR)$(BINDIR)/
 	install -m 0644 man/*.1.gz $(DESTDIR)$(MANDIR)/man1/
 	install -m 0644 man/*.5.gz $(DESTDIR)$(MANDIR)/man5/
@@ -89,6 +90,7 @@ install: $(STAMP) man completions
 	install -m 0644 completions/fish/*.fish $(DESTDIR)$(DATADIR)/fish/vendor_completions.d/
 	install -m 0644 LICENSE-MIT LICENSE-APACHE $(DESTDIR)$(DATADIR)/licenses/grev/
 	install -m 0644 README.md $(DESTDIR)$(DATADIR)/doc/grev/
+	install -m 0644 skills/grev/SKILL.md $(DESTDIR)$(DATADIR)/grev/skills/grev/
 
 uninstall:
 	rm -f $(addprefix $(DESTDIR)$(BINDIR)/,$(CMDS))
@@ -97,7 +99,7 @@ uninstall:
 	rm -f $(addprefix $(DESTDIR)$(DATADIR)/bash-completion/completions/,$(CMDS))
 	rm -f $(addprefix $(DESTDIR)$(DATADIR)/zsh/site-functions/_,$(CMDS))
 	rm -f $(addprefix $(DESTDIR)$(DATADIR)/fish/vendor_completions.d/,$(CMDS:%=%.fish))
-	rm -rf $(DESTDIR)$(DATADIR)/licenses/grev $(DESTDIR)$(DATADIR)/doc/grev
+	rm -rf $(DESTDIR)$(DATADIR)/licenses/grev $(DESTDIR)$(DATADIR)/doc/grev $(DESTDIR)$(DATADIR)/grev
 
 # Offline: unit tests plus CLI tests against the fake API server.
 test:

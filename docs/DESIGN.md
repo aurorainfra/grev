@@ -145,7 +145,9 @@ cmd/<tool>/        one small main per tool
 internal/cli/      getopt, common flags, config defaults, safeguards and ledger, records, progress, man/completions
 internal/config/   ~/.grevconfig: git-config parser/writer, schema
 internal/jev/      API types and client, credentials, pricing, packing, scheduler, engine
+internal/skill/    installs the agent skill for Claude Code and ~/.agents/skills agents
 internal/jevtest/  fake API for offline tests
+skills/grev/       the agent skill (SKILL.md), embedded in grev-settings and shipped in packages
 test/cli/          CLI tests against the fake API  (make test)
 test/live/         coarse live tests with your key, capped (make test-live)
 eval/              labelled fixtures that set templates and thresholds (make eval)

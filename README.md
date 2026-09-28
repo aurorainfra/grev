@@ -71,7 +71,7 @@ probev -H -q 'refund: asks for money back' -q 'angry: the writer is angry' < exa
 | [`trv`](docs/tools/trv.md) | tr, sed | translate, delete, squeeze or replace only where an instruction applies |
 | [`lookv`](docs/tools/lookv.md) | look, git bisect | find where an ordered input's answer flips, in a few rounds |
 | [`probev`](docs/tools/probev.md) | awk | print per-record probability columns |
-| [`grev-settings`](docs/tools/grev-settings.md) | — | config, API key, spend, models, one-off and raw requests |
+| [`grev-settings`](docs/tools/grev-settings.md) | git config | config, API key, spend, agent skill, models, one-off and raw requests |
 
 Every tool has `--help` and a man page. The common flags:
 
@@ -90,6 +90,23 @@ Every tool has `--help` and a man page. The common flags:
 - **With Go:** `go install github.com/aurorainfra/grev/cmd/...@latest`
 - **From source:** `make && sudo make install`, which also installs the man pages and bash/zsh/fish
   completions.
+
+## Use with coding agents
+
+The tools ship with an [Agent Skill](skills/grev/SKILL.md) that teaches coding agents what the
+tools do, when to use them over `grep` and `sort`, how to keep costs capped, and practical
+recipes:
+
+```sh
+grev-settings skill install            # ~/.claude/skills (Claude Code) and ~/.agents/skills
+grev-settings skill install --project  # the same, for the repository you're in
+grev-settings skill status             # check it's installed and current
+```
+
+`~/.agents/skills` is read by Codex, Gemini CLI, GitHub Copilot, Cursor, OpenCode, Goose and Amp.
+With a deb, rpm, apk or Arch package the skill is a link to `/usr/share/grev/skills/grev`, so
+package upgrades keep it current. The skill also installs with the usual skill installers:
+`npx skills add aurorainfra/grev` or `gh skill install aurorainfra/grev grev`.
 
 ## Configure
 

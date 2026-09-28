@@ -24,7 +24,7 @@ var Tools = []ToolInfo{
 	{"lookv", "look, git bisect", "binary-search ordered records for where an answer flips"},
 	{"trv", "tr, sed s///", "translate, delete, squeeze or replace only where an instruction applies"},
 	{"sortv", "sort", "sort records in an order described in words, by pairwise comparison"},
-	{"grev-settings", "curl", "configure, inspect and query the Jev API behind the grev tools"},
+	{"grev-settings", "git config", "configure the tools, install the agent skill, inspect and query the Jev API"},
 }
 
 func toolShort(name string) string {

@@ -55,6 +55,8 @@ archives:
       - LICENSE-APACHE
       - man/*
       - completions/**/*
+      # The agent skill, beside the binaries: `grev-settings skill install` links to it.
+      - skills/grev/*
 
 nfpms:
   - id: packages
@@ -67,7 +69,8 @@ nfpms:
       Unix filters that ask questions instead of matching patterns.
       grev is grep where the pattern is a question, plus isv, oneof, tagv,
       rank, sortv, pickv, uniqv, unwrap, seg, cutv, seek, probev, lookv and trv, built on
-      TypeSafe's Jev System One models.
+      TypeSafe's Jev System One models. Includes an agent skill for Claude Code,
+      Codex and other coding agents (grev-settings skill install).
     license: MIT OR Apache-2.0
     section: utils
     priority: optional
@@ -109,6 +112,11 @@ nfpms:
         packager: deb
       - src: ./README.md
         dst: /usr/share/doc/grev/README.md
+        file_info: { mode: 0644 }
+      # The agent skill. Packages don't write to home directories:
+      # `grev-settings skill install` links users' agents to this copy.
+      - src: ./skills/grev/SKILL.md
+        dst: /usr/share/grev/skills/grev/SKILL.md
         file_info: { mode: 0644 }
     archlinux:
       packager: Lukasz Magiera <me@magik.net>

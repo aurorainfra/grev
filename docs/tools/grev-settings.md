@@ -8,6 +8,7 @@ around them:
 - `config` edits `~/.grevconfig`
 - `key` stores and checks the API key
 - `spend` reads the local spend ledger
+- `skill` installs the agent skill that teaches coding agents to use the tools
 - `models` lists what your key can use
 - `ask` puts a few questions to the model about one text
 - `raw` sends a hand-written API request
@@ -76,6 +77,33 @@ last 3 days:
 ledger: ~/.local/state/grev/spend
 ```
 
+Teach your coding agents to use the tools. This installs the grev
+[Agent Skill](../../skills/grev/SKILL.md) for Claude Code (`~/.claude/skills`) and for Codex,
+Gemini CLI, Copilot, Cursor, OpenCode, Goose and Amp (`~/.agents/skills`):
+
+```console
+$ grev-settings skill install
+installed  ~/.claude/skills/grev → /usr/share/grev/skills/grev  (Claude Code)
+installed  ~/.agents/skills/grev → /usr/share/grev/skills/grev  (Codex, Gemini CLI, Copilot, Cursor, OpenCode, Goose, Amp)
+grev-settings: agents pick the skill up in new sessions; check with `grev-settings skill status`
+$ grev-settings skill status
+installed     ~/.claude/skills/grev → /usr/share/grev/skills/grev  (Claude Code)
+installed     ~/.agents/skills/grev → /usr/share/grev/skills/grev  (Codex, Gemini CLI, Copilot, Cursor, OpenCode, Goose, Amp)
+```
+
+How it installs:
+- **Link or copy.** With a package installed, the skill is a link to the packaged copy, so
+  upgrades keep it current. Otherwise, or with `--copy`, the files are copied; run `install`
+  again after upgrading. `status` exits 1 when a copy is missing or outdated.
+- **Scope.** `--project` installs into the current directory's `.claude/skills` and
+  `.agents/skills`. `--system` (as root) installs into the directories every user's agents read:
+  Claude Code's managed settings directory and `/etc/codex/skills`. `--agent claude` or
+  `--agent agents` picks one of the two directories.
+- **Safety.** A different skill already named `grev` is never overwritten. With `--force` it is
+  moved aside to `grev.bak-<time>`.
+- **`show`** prints the skill. It is also published as `skills/grev` in the repository, for
+  `npx skills add aurorainfra/grev` and `gh skill install aurorainfra/grev grev`.
+
 Send a raw API request (`model` is filled in if missing) and see the unmodified response,
 including the token usage the API reports:
 
@@ -110,6 +138,7 @@ $ grev-settings config unset limits.montly
 | `key import` | move a key from `TYPESAFE_API_KEY` / `TYPESAFE_API_KEY_FILE` into the config |
 | `key status`, `path`, `rm` | show the source in use and check it; where `key set` writes; remove it |
 | `spend [--days N]` | today's and this month's spend against `limits.daily` / `limits.monthly` |
+| `skill install`, `uninstall`, `status`, `show` | install the agent skill for Claude Code and `~/.agents/skills` agents; `--project`, `--system`, `--agent`, `--copy`, `--force` |
 | `models` | the models your key can use |
 | `ask -q SPEC… [FILE]` | ask questions about FILE, stdin, `--state TEXT` or `-S FILE`; `--json` for raw answers |
 | `raw [FILE]` | POST a request JSON as-is and print the response |
@@ -120,8 +149,8 @@ Choice, `<lo|mid|hi>` for a Score. See `grev-settings --help`, `man grev-setting
 
 ## Exit status
 
-0 ok, 1 key check failed or config key not found, 2 error, 4 declined or over a spend limit,
-130 interrupted.
+0 ok, 1 key check failed, config key not found, or `skill status` found the skill missing or
+outdated, 2 error, 4 declined or over a spend limit, 130 interrupted.
 
 ## See also
 

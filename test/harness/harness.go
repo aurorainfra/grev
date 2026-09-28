@@ -118,9 +118,16 @@ type Result struct {
 // cannot be started or takes longer than a minute.
 func Run(tb testing.TB, env []string, stdin, tool string, args ...string) Result {
 	tb.Helper()
+	return RunDir(tb, "", env, stdin, tool, args...)
+}
+
+// RunDir is Run with the working directory set to dir ("" for the test's).
+func RunDir(tb testing.TB, dir string, env []string, stdin, tool string, args ...string) Result {
+	tb.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, Bin(tb, tool), args...)
+	cmd.Dir = dir
 	cmd.Env = env
 	cmd.Stdin = strings.NewReader(stdin)
 	var out, errb bytes.Buffer
