@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -36,11 +37,49 @@ func version() string {
 	return "dev"
 }
 
+// ProjectURL is where grev comes from. The User-Agent carries it, and it is
+// grev's app identity on OpenRouter, so it must not change.
+const ProjectURL = "https://github.com/aurorainfra/grev"
+
 // UserAgent identifies the tool to the API, e.g.
 // "grev/0.1.0 (pickv; linux/amd64; +https://github.com/aurorainfra/grev)".
 func UserAgent(tool string) string {
-	return fmt.Sprintf("grev/%s (%s; %s/%s; +https://github.com/aurorainfra/grev)",
-		strings.TrimPrefix(version(), "v"), tool, runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("grev/%s (%s; %s/%s; +%s)",
+		strings.TrimPrefix(version(), "v"), tool, runtime.GOOS, runtime.GOARCH, ProjectURL)
+}
+
+// Attribution returns OpenRouter's app-attribution headers
+// (openrouter.ai/docs/app-attribution). They name the whole family as one
+// app, grev; the User-Agent says which tool. Other endpoints ignore them.
+func Attribution() http.Header {
+	return http.Header{
+		"Http-Referer":            {ProjectURL},
+		"X-Openrouter-Title":      {"grev"},
+		"X-Openrouter-Categories": {"programming-app"},
+	}
+}
+
+// NewClient returns an API client for key: the endpoint from TYPESAFE_BASE_URL
+// or api.endpoint, the tool's User-Agent, and the attribution headers unless
+// api.attribution is false.
+func NewClient(cfg *config.Config, key, tool string) *jev.Client {
+	c := jev.NewClient(key, UserAgent(tool))
+	if os.Getenv("TYPESAFE_BASE_URL") == "" {
+		if ep := cfg.Str("api", "", "endpoint"); ep != "" {
+			c.BaseURL = strings.TrimRight(ep, "/")
+		}
+	}
+	if v, ok := cfg.Get("api", "", "attribution"); !ok || !isFalse(v.Raw) {
+		c.Header = Attribution()
+	}
+	return c
+}
+
+// isFalse reports whether s is a boolean false. Anything unparsable counts as
+// the default, true; Check reports it.
+func isFalse(s string) bool {
+	b, err := config.Bool(s)
+	return err == nil && !b
 }
 
 // DefaultConfirmAbove is the built-in safeguard: runs quoted above this many
@@ -352,12 +391,7 @@ func (t *Tool) Engine() *Engine {
 	if key.Warn != "" {
 		t.Warnf("warning: %s", key.Warn)
 	}
-	c := jev.NewClient(key.Value, UserAgent(t.Name))
-	if os.Getenv("TYPESAFE_BASE_URL") == "" {
-		if ep := t.cfg.Str("api", "", "endpoint"); ep != "" {
-			c.BaseURL = strings.TrimRight(ep, "/")
-		}
-	}
+	c := NewClient(t.cfg, key.Value, t.Name)
 	for _, sub := range t.cfg.Subsections("model") {
 		if v, ok := t.cfg.Get("model", sub, "price"); ok {
 			if f, err := config.Float(v.Raw); err == nil {

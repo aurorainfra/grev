@@ -46,6 +46,10 @@ type Req struct {
 	Bytes     int
 	Model     string // the request's model field, when it parsed
 	UserAgent string
+
+	// OpenRouter app attribution: HTTP-Referer, X-OpenRouter-Title and
+	// X-OpenRouter-Categories.
+	Referer, Title, Categories string
 }
 
 // Server is a running fake API.
@@ -239,7 +243,8 @@ func (s *Server) systemOne(w http.ResponseWriter, r *http.Request) {
 		}
 		answers[id] = s.o.Oracle(req.State, q)
 	}
-	s.record(Req{Status: 200, Questions: len(req.Questions), Bytes: len(body), Model: req.Model, UserAgent: r.UserAgent()})
+	s.record(Req{Status: 200, Questions: len(req.Questions), Bytes: len(body), Model: req.Model, UserAgent: r.UserAgent(),
+		Referer: r.Header.Get("HTTP-Referer"), Title: r.Header.Get("X-OpenRouter-Title"), Categories: r.Header.Get("X-OpenRouter-Categories")})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"model":   s.o.Model,
 		"answers": answers,

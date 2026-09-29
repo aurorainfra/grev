@@ -480,3 +480,31 @@ func TestStatsProjection(t *testing.T) {
 		t.Fatal("unknown totals should project -1")
 	}
 }
+
+// TestClientHeader: extra headers reach the server, and can't replace the
+// ones the client owns.
+func TestClientHeader(t *testing.T) {
+	var got http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		w.Write([]byte(`{"models":[]}`))
+	}))
+	defer srv.Close()
+	c := &Client{BaseURL: srv.URL, Key: "k", UserAgent: "ua", HTTP: srv.Client(), Header: http.Header{
+		"Http-Referer":  {"https://example.com"},
+		"authorization": {"Bearer stolen"},
+		"User-Agent":    {"other"},
+	}}
+	if _, err := c.Models(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("HTTP-Referer") != "https://example.com" {
+		t.Errorf("extra header missing: %v", got)
+	}
+	if a := got.Values("Authorization"); len(a) != 1 || a[0] != "Bearer k" {
+		t.Errorf("Authorization: %q", a)
+	}
+	if ua := got.Values("User-Agent"); len(ua) != 1 || ua[0] != "ua" {
+		t.Errorf("User-Agent: %q", ua)
+	}
+}

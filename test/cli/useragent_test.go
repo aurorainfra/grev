@@ -27,3 +27,27 @@ func TestUserAgent(t *testing.T) {
 		}
 	}
 }
+
+// TestAttribution: requests carry OpenRouter's app-attribution headers,
+// naming the family as one app, and api.attribution = false drops them (but
+// not the User-Agent).
+func TestAttribution(t *testing.T) {
+	srv, env := fake(t, jevtest.Options{})
+	expect(t, run(t, env, "yes\nno\n", "grev", "q"), 0, "yes\n")
+	if r := run(t, env, "", "grev-settings", "ask", "--state", "s", "-q", "x: is it"); r.Code != 0 {
+		t.Fatalf("grev-settings ask: %+v", r)
+	}
+	log := srv.Log()
+	for _, r := range log[len(log)-2:] {
+		if r.Referer != "https://github.com/aurorainfra/grev" || r.Title != "grev" || r.Categories != "programming-app" {
+			t.Errorf("attribution headers: %+v", r)
+		}
+	}
+
+	writeConfig(t, env, "[api]\n\tattribution = false\n")
+	expect(t, run(t, env, "yes\nno\n", "grev", "q"), 0, "yes\n")
+	log = srv.Log()
+	if r := log[len(log)-1]; r.Referer != "" || r.Title != "" || r.Categories != "" || r.UserAgent == "" {
+		t.Errorf("with api.attribution = false: %+v", r)
+	}
+}

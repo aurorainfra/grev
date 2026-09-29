@@ -90,6 +90,19 @@ Per-tool defaults take any long option of that tool:
 	scores
 ```
 
+Through OpenRouter, which serves the same System One API (store its key with `grev-settings key set`):
+
+```ini
+[api]
+	endpoint = https://openrouter.ai/api
+	model = jev-latest    ; the built-in default, jev-1.13.0, isn't served there
+```
+
+Requests carry OpenRouter's [app-attribution](https://openrouter.ai/docs/app-attribution)
+headers, so the usage counts toward grev in its rankings; they identify the project, as the
+User-Agent already does, and nothing about you. Set `attribution = false` under `[api]` to leave
+them out.
+
 A model the built-in price table doesn't know yet:
 
 ```ini

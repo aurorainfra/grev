@@ -35,6 +35,11 @@ type Client struct {
 	UserAgent string
 	HTTP      *http.Client
 
+	// Header holds extra headers sent with every request, such as a
+	// gateway's app attribution. They never replace Authorization,
+	// Content-Type or User-Agent.
+	Header http.Header
+
 	// OnRetry, if set, is called before sleeping for a retry. throttled is
 	// true for 429/529, which the scheduler treats as a signal to slow down.
 	OnRetry func(status int, throttled bool, wait time.Duration)
@@ -229,6 +234,13 @@ func (c *Client) once(ctx context.Context, method, path string, body []byte) ([]
 	hr, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, rd)
 	if err != nil {
 		return nil, -1, 0, err
+	}
+	for k, vs := range c.Header {
+		switch http.CanonicalHeaderKey(k) {
+		case "Authorization", "Content-Type", "User-Agent":
+			continue
+		}
+		hr.Header[http.CanonicalHeaderKey(k)] = vs
 	}
 	hr.Header.Set("Authorization", "Bearer "+c.Key)
 	if body != nil {

@@ -23,6 +23,7 @@ var Schema = []Key{
 	{"api", "", "keyCommand", "command", "", "Instead of api.key: run this command and use its standard output as the key (sh -c; cmd /C on Windows), e.g. `pass show typesafe/api`."},
 	{"api", "", "endpoint", "string", "https://api.typesafe.ai", "API root. TYPESAFE_BASE_URL overrides it."},
 	{"api", "", "model", "string", "jev-1.13.0", "Model id. -M and TYPESAFE_DEFAULT_MODEL override it."},
+	{"api", "", "attribution", "bool", "true", "Send OpenRouter's app-attribution headers (HTTP-Referer, X-OpenRouter-Title, X-OpenRouter-Categories), which credit requests to grev in its rankings. The User-Agent names grev either way."},
 
 	{"defaults", "", "progress", "enum", "never", "Show the -p overlay: always, never, or auto (when stderr is a terminal)."},
 	{"defaults", "", "jobs", "option", "4", "Parallel requests: a number or max, as -J."},

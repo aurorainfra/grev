@@ -325,12 +325,7 @@ func storeKey(t *cli.Tool, check bool, path, key string) {
 }
 
 func verify(t *cli.Tool, key string) (int, error) {
-	c := jev.NewClient(key, cli.UserAgent("grev-settings"))
-	if os.Getenv("TYPESAFE_BASE_URL") == "" {
-		if ep := t.Config().Str("api", "", "endpoint"); ep != "" {
-			c.BaseURL = strings.TrimRight(ep, "/")
-		}
-	}
+	c := cli.NewClient(t.Config(), key, "grev-settings")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ms, err := c.Models(ctx)
