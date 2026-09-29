@@ -13,7 +13,7 @@ license=('MIT OR Apache-2.0')
 depends=('glibc')
 makedepends=('go')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP') # replace with the real sum via updpkgsums once v$pkgver is tagged
+sha256sums=('4ecc10966c631dba0ea921a3c5cbd180a3b2f8e3c450e8d45fcaede1a04b9c46')
 
 _goenv() {
   export CGO_CPPFLAGS="${CPPFLAGS}"
