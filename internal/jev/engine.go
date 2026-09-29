@@ -73,6 +73,19 @@ type Result struct {
 // ErrBudget is returned when --max-cost stops a run.
 var ErrBudget = errors.New("cost budget reached")
 
+// ErrStopped wraps the failure of a request that stopped the run (see
+// Engine.OnFail and StopOnFail).
+var ErrStopped = errors.New("run stopped")
+
+// FailAction is what to do with a request that failed for good.
+type FailAction int
+
+const (
+	FailSkip  FailAction = iota // its questions fail; the run goes on
+	FailRetry                   // send it again
+	FailStop                    // stop the run, sending nothing more
+)
+
 // Engine packs items into requests and runs them through the scheduler.
 type Engine struct {
 	Client  *Client
@@ -86,6 +99,21 @@ type Engine struct {
 	// run (daily/monthly caps), or a negative number for "no limit". It is
 	// consulted before every request.
 	Budget func() float64
+
+	// OnFail, if set, decides what happens to a request that failed after
+	// the client's retries (auth failures and oversize requests aside). Calls
+	// are serialized, and no new request starts while one runs, so it may
+	// ask the user. A FailRetry answer also covers the requests that failed
+	// while it was deciding.
+	OnFail func(err error, questions int) FailAction
+
+	// StopOnFail turns FailSkip into FailStop, for callers that can't use a
+	// run with missing answers: better to stop than to pay for the rest.
+	StopOnFail bool
+
+	hold      sync.RWMutex // held while OnFail decides
+	lastAct   FailAction
+	lastActAt time.Time
 }
 
 // NewEngine wires a client and scheduler with fresh stats.
@@ -210,6 +238,8 @@ func (e *Engine) Run(ctx context.Context, in <-chan *Item, flush time.Duration, 
 					break
 				}
 			}
+			e.hold.RLock() // wait out an OnFail decision
+			e.hold.RUnlock()
 			e.Stats.queued(1)
 			if err := e.Sched.Acquire(ctx, b.est); err != nil {
 				e.Stats.queued(-1)
@@ -352,6 +382,22 @@ func (e *Engine) runBatch(ctx context.Context, b *batch) ([]Result, error) {
 				err = fmt.Errorf("%w (≈%d tokens estimated): %w", ErrTooLarge, b.est, ae)
 			}
 		}
+		if ctx.Err() == nil && !errors.Is(err, ErrTooLarge) {
+			switch e.onFail(ctx, err, len(b.items)) {
+			case FailRetry:
+				e.Stats.finish(0, b.est, 0) // the failed request
+				if err := e.Sched.Acquire(ctx, b.est); err != nil {
+					e.Stats.finish(len(b.items), 0, len(b.items))
+					return failAll(b.items, context.Cause(ctx)), nil
+				}
+				e.Stats.start(b.est)
+				return e.runBatch(ctx, b)
+			case FailStop:
+				err = fmt.Errorf("%w: %w", ErrStopped, err)
+				e.Stats.finish(len(b.items), b.est, len(b.items))
+				return failAll(b.items, err), err
+			}
+		}
 		if ctx.Err() != nil {
 			err = context.Cause(ctx)
 		}
@@ -377,6 +423,27 @@ func (e *Engine) runBatch(ctx context.Context, b *batch) ([]Result, error) {
 	}
 	e.Stats.finishOK(len(b.items), b.est, resp.Usage.InputTokens, cost, known, model, missing)
 	return res, nil
+}
+
+// onFail applies OnFail and StopOnFail to a request that has just failed.
+func (e *Engine) onFail(ctx context.Context, err error, n int) FailAction {
+	failedAt := time.Now()
+	e.hold.Lock()
+	defer e.hold.Unlock()
+	act := FailSkip
+	switch {
+	case ctx.Err() != nil:
+		return FailSkip // the run is ending anyway
+	case e.lastAct == FailRetry && e.lastActAt.After(failedAt):
+		act = FailRetry // it failed while the user was answering "retry"
+	case e.OnFail != nil:
+		act = e.OnFail(err, n)
+		e.lastAct, e.lastActAt = act, time.Now()
+	}
+	if act == FailSkip && e.StopOnFail {
+		act = FailStop
+	}
+	return act
 }
 
 // split halves a batch the API rejected as too large and runs both halves.

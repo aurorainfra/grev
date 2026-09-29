@@ -39,42 +39,52 @@ func printQuote(w io.Writer, name string, e *jev.Engine, q jev.Quote) {
 	}
 }
 
-// askYes prompts on the controlling terminal (GREV_TTY overrides it for
-// tests), since stdin usually carries the data.
+// askYes asks a yes/no question on the terminal (see ask); anything but y or
+// yes, including end of input and Ctrl-C, is a no.
 func askYes(ctx context.Context, prompt string) (bool, error) {
+	a, ok, err := ask(ctx, func() { fmt.Fprint(os.Stderr, prompt) })
+	if err != nil {
+		return false, err
+	}
+	return ok && (a == "y" || a == "yes"), nil
+}
+
+// ask prompts on the controlling terminal (GREV_TTY overrides it for tests),
+// since stdin usually carries the data. show prints the question once the
+// terminal is open, so nothing is printed when there is none (err). The
+// answer comes back trimmed and lower-cased; ok is false at end of input or
+// on Ctrl-C.
+func ask(ctx context.Context, show func()) (answer string, ok bool, err error) {
 	path := os.Getenv("GREV_TTY")
 	if path == "" {
 		path = ttyPath
 	}
 	f, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	defer f.Close()
-	fmt.Fprint(os.Stderr, prompt)
-	type answer struct {
+	show()
+	type reply struct {
 		line string
 		err  error
 	}
-	ch := make(chan answer, 1)
+	ch := make(chan reply, 1)
 	go func() {
 		line, err := readLine(f)
-		ch <- answer{line, err}
+		ch <- reply{line, err}
 	}()
-	var line string
 	select {
-	case <-ctx.Done(): // Ctrl-C at the prompt declines
+	case <-ctx.Done():
 		fmt.Fprintln(os.Stderr)
-		return false, nil
-	case a := <-ch:
-		if a.err != nil && a.line == "" {
+		return "", false, nil
+	case r := <-ch:
+		if r.err != nil && r.line == "" {
 			fmt.Fprintln(os.Stderr)
-			return false, nil
+			return "", false, nil
 		}
-		line = a.line
+		return strings.ToLower(strings.TrimSpace(r.line)), true, nil
 	}
-	a := strings.ToLower(strings.TrimSpace(line))
-	return a == "y" || a == "yes", nil
 }
 
 // readLine reads up to a newline one byte at a time, so nothing past the

@@ -159,6 +159,9 @@ Nothing big runs by surprise:
   refuses.
 - `--max-cost` and the daily/monthly caps stop a run before it goes over.
 - Closing the output pipe (`| head`) stops the spending.
+- Failed requests are retried with backoff. If one still fails during a big run, the tool asks
+  on the terminal whether to retry, skip it or stop, rather than throw away what the run has
+  already spent.
 
 ## More
 

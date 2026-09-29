@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,11 +19,13 @@ import (
 // DefaultBaseURL is the public API root; TYPESAFE_BASE_URL overrides it.
 const DefaultBaseURL = "https://api.typesafe.ai"
 
-// Retry policy, mirroring the official SDK defaults.
+// Retry policy: exponential backoff from half a second, so a request rides
+// out about half a minute of trouble (a proxy's 520, a restarting backend)
+// before it fails for good.
 const (
-	MaxRetries     = 3
+	MaxRetries     = 6
 	backoffInitial = 500 * time.Millisecond
-	backoffMax     = 5 * time.Second
+	backoffMax     = 20 * time.Second
 	backoffJitter  = 0.25
 	maxRetryAfter  = 60 * time.Second
 	RequestTimeout = 60 * time.Second
@@ -76,10 +79,21 @@ func (e *APIError) Error() string {
 			msg = string(b)
 		}
 	}
+	if l := strings.ToLower(msg); strings.HasPrefix(l, "<!doctype") || strings.HasPrefix(l, "<html") {
+		// A proxy's page (Cloudflare's, say): its title says what happened.
+		title := htmlTitle.FindStringSubmatch(msg)
+		msg = "HTML error page"
+		if title != nil {
+			msg += ": " + strings.Join(strings.Fields(title[1]), " ")
+		}
+	}
 	if len(msg) > 400 {
 		msg = msg[:400] + "…"
 	}
-	s := fmt.Sprintf("API %d %s", e.Status, http.StatusText(e.Status))
+	s := fmt.Sprintf("API %d", e.Status)
+	if t := http.StatusText(e.Status); t != "" {
+		s += " " + t
+	}
 	if msg != "" {
 		s += ": " + msg
 	}
@@ -92,9 +106,16 @@ func (e *APIError) Error() string {
 	return s
 }
 
+var htmlTitle = regexp.MustCompile(`(?is)<title>(.*?)</title>`)
+
+// retryable reports whether a failed request may succeed if sent again:
+// transport errors and every 5xx (including proxies' 52x), timeouts,
+// conflicts and throttling. Other 4xx would fail the same way again.
 func retryable(status int) bool {
-	switch status {
-	case 429, 500, 502, 503, 504, 529:
+	switch {
+	case status == 0, status >= 500:
+		return true
+	case status == 408, status == 409, status == 425, status == 429:
 		return true
 	}
 	return false
@@ -112,16 +133,16 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 	if debugRequests {
 		fmt.Fprintf(os.Stderr, "jev request: %s\n", body)
 	}
-	out, err := c.call(ctx, http.MethodPost, "/v1/systemone", body)
+	var resp Response
+	_, err = c.call(ctx, http.MethodPost, "/v1/systemone", body, func(out []byte) error {
+		if debugRequests {
+			fmt.Fprintf(os.Stderr, "jev response: %s\n", out)
+		}
+		resp = Response{}
+		return json.Unmarshal(out, &resp)
+	})
 	if err != nil {
 		return nil, err
-	}
-	if debugRequests {
-		fmt.Fprintf(os.Stderr, "jev response: %s\n", out)
-	}
-	var resp Response
-	if err := json.Unmarshal(out, &resp); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
 	}
 	return &resp, nil
 }
@@ -133,7 +154,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 // endpoint can answer with, and a gateway's full list is mostly chat models
 // that would only mislead.
 func (c *Client) Models(ctx context.Context) ([]ModelCard, error) {
-	out, err := c.call(ctx, http.MethodGet, "/v1/models", nil)
+	out, err := c.call(ctx, http.MethodGet, "/v1/models", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -191,20 +212,31 @@ func knownJevModel(id string) bool {
 
 // Raw sends body to path and returns the raw response body.
 func (c *Client) Raw(ctx context.Context, method, path string, body []byte) ([]byte, error) {
-	return c.call(ctx, method, path, body)
+	return c.call(ctx, method, path, body, nil)
 }
 
-func (c *Client) call(ctx context.Context, method, path string, body []byte) ([]byte, error) {
+// call sends the request, retrying what may succeed on a second try. decode,
+// if set, reads a 2xx body; a body it can't read (a truncated answer, a
+// proxy's page) is retried too.
+func (c *Client) call(ctx context.Context, method, path string, body []byte, decode func([]byte) error) ([]byte, error) {
 	for attempt := 0; ; attempt++ {
 		out, status, wait, err := c.once(ctx, method, path, body)
+		if err == nil && decode != nil {
+			if derr := decode(out); derr != nil {
+				err, status = fmt.Errorf("decoding response: %w", derr), 0
+			}
+		}
 		if err == nil {
 			return out, nil
 		}
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if attempt >= MaxRetries || (status != 0 && !retryable(status)) {
+		if status != 0 && !retryable(status) {
 			return nil, err
+		}
+		if attempt >= MaxRetries {
+			return nil, fmt.Errorf("%w; gave up after %d attempts", err, attempt+1)
 		}
 		if wait <= 0 {
 			wait = backoff(attempt)
@@ -266,8 +298,19 @@ func (c *Client) once(ctx context.Context, method, path string, body []byte) ([]
 	return nil, resp.StatusCode, retryAfter(resp.Header), &APIError{
 		Status:    resp.StatusCode,
 		Body:      string(out),
-		RequestID: resp.Header.Get("x-typesafe-request-id"),
+		RequestID: requestID(resp.Header),
 	}
+}
+
+// requestID names the failed request for support: the API's own id, or the
+// proxy's (Cloudflare's ray id) when the API never saw it.
+func requestID(h http.Header) string {
+	for _, k := range []string{"x-typesafe-request-id", "x-request-id", "cf-ray"} {
+		if v := h.Get(k); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func backoff(attempt int) time.Duration {

@@ -35,7 +35,10 @@ type Options struct {
 	RetryAfterMS  int                  // 429 retry-after-ms header (default 50 when RetryAfterSec is 0)
 	RetryAfterSec int                  // 429 Retry-After header in seconds, used if set
 	MaxBody       int                  // >0: request bodies larger than this get 400 max_tokens_exceeded, as jev-1.13 answers
-	FailFirst     int                  // the first N POSTs answer 500
+	FailFirst     int                  // the first N POSTs fail, answering FailStatus
+	FailStatus    int                  // status of those failures (default 500)
+	FailBody      string               // their raw body; "" means a JSON detail
+	FailWaitMS    int                  // their retry-after-ms header, so tests needn't sit through backoff (0 = none)
 	Model         string               // model reported in responses (default jev-1.13.0)
 }
 
@@ -183,8 +186,21 @@ func (s *Server) systemOne(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	if n <= s.o.FailFirst {
-		s.record(Req{Status: 500, Bytes: len(body)})
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"detail": "injected failure"})
+		status := s.o.FailStatus
+		if status == 0 {
+			status = http.StatusInternalServerError
+		}
+		s.record(Req{Status: status, Bytes: len(body)})
+		if s.o.FailWaitMS > 0 {
+			w.Header().Set("retry-after-ms", strconv.Itoa(s.o.FailWaitMS))
+		}
+		if s.o.FailBody != "" {
+			w.Header().Set("cf-ray", "8c1f00ba5eba11-WAW")
+			w.WriteHeader(status)
+			io.WriteString(w, s.o.FailBody)
+			return
+		}
+		writeJSON(w, status, map[string]any{"detail": "injected failure"})
 		return
 	}
 	var req wireRequest

@@ -358,3 +358,84 @@ func TestJmaxConverges(t *testing.T) {
 		t.Errorf("too slow: %v", el)
 	}
 }
+
+// threeBatches is three one-question requests (one state each), for J=1 runs
+// whose request order is known.
+func threeBatches() []*jev.Item {
+	var its []*jev.Item
+	for i := 0; i < 3; i++ {
+		its = append(its, items(jev.NewState(fmt.Sprint("s", i)), 1, func(int) float64 { return 0.9 })...)
+	}
+	return its
+}
+
+func TestEngineRetriesProxyErrors(t *testing.T) {
+	srv := jevtest.New(t, jevtest.Options{FailFirst: 2, FailStatus: 520, FailWaitMS: 1, FailBody: "error code: 520"})
+	e := engine(t, srv, "k", 1, false)
+	res, err := collect(t, e, context.Background(), items(jev.NewState("s"), 2, func(int) float64 { return 0.9 }))
+	if err != nil || len(res) != 2 || res[0].Err != nil || res[1].Err != nil {
+		t.Fatalf("a 520 should be retried: err %v, results %v", err, res)
+	}
+}
+
+// TestEngineOnFailRetry: a request that exhausts the client's retries goes
+// to OnFail, and "retry" sends it again.
+func TestEngineOnFailRetry(t *testing.T) {
+	srv := jevtest.New(t, jevtest.Options{FailFirst: jev.MaxRetries + 1, FailStatus: 503, FailWaitMS: 1})
+	e := engine(t, srv, "k", 1, false)
+	var calls []string
+	e.OnFail = func(err error, n int) jev.FailAction {
+		calls = append(calls, fmt.Sprintf("%d: %v", n, err))
+		return jev.FailRetry
+	}
+	res, err := collect(t, e, context.Background(), threeBatches())
+	if err != nil || len(res) != 3 {
+		t.Fatalf("err %v, results %v", err, res)
+	}
+	for _, r := range res {
+		if r.Err != nil {
+			t.Fatalf("retried request still failed: %v", r.Err)
+		}
+	}
+	if len(calls) != 1 || !strings.Contains(calls[0], "1: API 503") || !strings.Contains(calls[0], fmt.Sprintf("gave up after %d attempts", jev.MaxRetries+1)) {
+		t.Fatalf("OnFail calls: %q", calls)
+	}
+	if s := e.Stats.Snapshot(); s.DoneQ != 3 || s.FailedQ != 0 {
+		t.Fatalf("stats after a retried request: %+v", s)
+	}
+}
+
+// TestEngineOnFailSkipAndStop: "skip" fails that request's questions and
+// goes on; "stop" ends the run with nothing more sent.
+func TestEngineOnFailSkipAndStop(t *testing.T) {
+	srv := jevtest.New(t, jevtest.Options{FailFirst: jev.MaxRetries + 1, FailWaitMS: 1})
+	e := engine(t, srv, "k", 1, false)
+	e.OnFail = func(error, int) jev.FailAction { return jev.FailSkip }
+	res, err := collect(t, e, context.Background(), threeBatches())
+	if err != nil || len(res) != 3 || res[0].Err == nil || res[1].Err != nil || res[2].Err != nil {
+		t.Fatalf("skip: err %v, results %v", err, res)
+	}
+
+	srv = jevtest.New(t, jevtest.Options{FailFirst: 1000, FailWaitMS: 1})
+	e = engine(t, srv, "k", 1, false)
+	e.OnFail = func(error, int) jev.FailAction { return jev.FailStop }
+	_, err = collect(t, e, context.Background(), threeBatches())
+	if !errors.Is(err, jev.ErrStopped) || !strings.Contains(err.Error(), "API 500") {
+		t.Fatalf("stop: %v", err)
+	}
+	if n := srv.Requests(); n != jev.MaxRetries+1 {
+		t.Fatalf("stop sent %d requests; want only the failed one's %d attempts", n, jev.MaxRetries+1)
+	}
+}
+
+// TestEngineStopOnFail: without anyone to ask, a caller that needs every
+// answer stops at the first failed request instead of paying for the rest.
+func TestEngineStopOnFail(t *testing.T) {
+	srv := jevtest.New(t, jevtest.Options{FailFirst: 1000, FailStatus: 400})
+	e := engine(t, srv, "k", 1, false)
+	e.StopOnFail = true
+	_, err := collect(t, e, context.Background(), threeBatches())
+	if !errors.Is(err, jev.ErrStopped) || srv.Requests() != 1 {
+		t.Fatalf("err %v after %d requests (a 400 is not retried, and nothing follows it)", err, srv.Requests())
+	}
+}

@@ -109,6 +109,7 @@ type Tool struct {
 	progress     string // always | never | auto
 	quote        bool
 	confirmAbove float64 // USD; < 0 = never ask
+	retryAlways  bool    // "retry without asking again" was the answer to a failed request
 	j            string
 	model        string
 	maxCost      float64 // USD; 0 = no per-run cap
@@ -406,6 +407,7 @@ func (t *Tool) Engine() *Engine {
 		t.eng.MaxQ = q
 	}
 	t.eng.MaxCost = t.maxCost
+	t.eng.OnFail = t.onFail
 
 	t.ledger = OpenLedger(t.Name, t.cfgFloat("limits", "daily"), t.cfgFloat("limits", "monthly"))
 	if t.ledger != nil {
@@ -552,6 +554,9 @@ func (t *Tool) Finish(err error) int {
 		}
 		t.Warnf("stopped: spend limit reached: %s%s", strings.Join(why, "; "), t.spent())
 		return ExitDeclined
+	case errors.Is(err, jev.ErrStopped):
+		t.Warnf("%v%s", err, t.spent())
+		return ExitError
 	case errors.Is(err, context.Canceled) && t.sigs.Load() > 0:
 		t.Warnf("interrupted%s", t.spent())
 		return ExitInterrupt
@@ -561,6 +566,65 @@ func (t *Tool) Finish(err error) int {
 		t.Warnf("%v", err)
 		return ExitError
 	}
+}
+
+// onFail is the engine's OnFail. On a big run (quoted, or already spent, at
+// --confirm-above or more; at $1 when that is off) it asks on the terminal
+// what to do with a request that failed for good, rather than lose the run.
+// Small runs, and runs without a terminal, let the questions fail as always.
+func (t *Tool) onFail(err error, n int) jev.FailAction {
+	if t.retryAlways {
+		return jev.FailRetry
+	}
+	s := t.eng.Stats.Snapshot()
+	threshold := t.confirmAbove
+	if threshold < 0 {
+		threshold = DefaultConfirmAbove
+	}
+	if max(s.Projected(), s.Cost) < threshold {
+		return jev.FailSkip
+	}
+	skip := !t.eng.StopOnFail
+	opts, keys := "Retry it [r], retry without asking again [a], or stop [q]?", "[R/a/q]"
+	if skip {
+		opts, keys = fmt.Sprintf("Retry it [r], retry without asking again [a], skip its %d questions [s], or stop [q]?", n), "[R/a/s/q]"
+	}
+	act := jev.FailSkip
+	t.pauseProgress(func() {
+		shown := false
+		for {
+			a, ok, err2 := ask(t.Ctx(), func() {
+				if !shown {
+					shown = true
+					fmt.Fprintf(os.Stderr, "%s: a request failed: %v\n", t.Name, err)
+					done := commas(s.DoneQ)
+					if s.PlanQ > 0 {
+						done += " of " + commas(s.PlanQ)
+					}
+					fmt.Fprintf(os.Stderr, "%s: %s questions answered so far, %s spent; the request held %d\n", t.Name, done, fmtCost(s.Cost), n)
+				}
+				fmt.Fprintf(os.Stderr, "%s %s ", opts, keys)
+			})
+			switch {
+			case err2 != nil:
+				return // no terminal: as before
+			case !ok:
+				act = jev.FailStop
+			case a == "" || a == "r" || a == "retry" || a == "y" || a == "yes":
+				act = jev.FailRetry
+			case a == "a" || a == "always":
+				act, t.retryAlways = jev.FailRetry, true
+			case skip && (a == "s" || a == "skip"):
+				act = jev.FailSkip
+			case a == "q" || a == "quit" || a == "stop" || a == "n" || a == "no":
+				act = jev.FailStop
+			default:
+				continue
+			}
+			return
+		}
+	})
+	return act
 }
 
 // spent describes the spend so far for messages about cut-short runs (the

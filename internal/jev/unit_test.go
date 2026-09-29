@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -370,6 +371,46 @@ func TestAPIError(t *testing.T) {
 	s = (&APIError{Status: 500, Body: strings.Repeat("x", 1000)}).Error()
 	if len(s) > 500 {
 		t.Errorf("long bodies should be truncated: %d chars", len(s))
+	}
+	if s = (&APIError{Status: 520, Body: "error code: 520"}).Error(); s != "API 520: error code: 520" {
+		t.Errorf("unnamed status: %q", s)
+	}
+	cf := "<!DOCTYPE html>\n<html><head><title>api.typesafe.ai | 520:\n  Web server is returning an unknown error</title></head><body>" +
+		strings.Repeat("<div>x</div>", 200) + "</body></html>"
+	if s = (&APIError{Status: 520, Body: cf, RequestID: "8c1f-WAW"}).Error(); s !=
+		"API 520: HTML error page: api.typesafe.ai | 520: Web server is returning an unknown error (request-id 8c1f-WAW)" {
+		t.Errorf("proxy page: %q", s)
+	}
+}
+
+func TestRetryable(t *testing.T) {
+	for status, want := range map[int]bool{
+		0: true, 500: true, 502: true, 503: true, 520: true, 522: true, 524: true, 529: true,
+		408: true, 409: true, 425: true, 429: true,
+		-1: false, 400: false, 401: false, 403: false, 404: false, 413: false, 422: false,
+	} {
+		if retryable(status) != want {
+			t.Errorf("retryable(%d) = %v", status, !want)
+		}
+	}
+}
+
+// TestUndecodableBodyRetried: a 2xx body that isn't the API's JSON (a
+// proxy's page, a cut-off answer) is retried like a failed request.
+func TestUndecodableBodyRetried(t *testing.T) {
+	var n atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if n.Add(1) == 1 {
+			w.Write([]byte(`{"answers":{"q0":{"typ`))
+			return
+		}
+		w.Write([]byte(`{"model":"jev-1.13.0","answers":{"q0":{"type":"noul","noul":0.9}},"usage":{"input_tokens":300}}`))
+	}))
+	defer srv.Close()
+	c := &Client{BaseURL: srv.URL, Key: "k", HTTP: srv.Client()}
+	resp, err := c.Do(context.Background(), &Request{Model: "jev-1.13.0", Questions: map[string]Question{}})
+	if err != nil || n.Load() != 2 || resp.Answers["q0"].Noul != 0.9 {
+		t.Fatalf("resp %+v, err %v, %d requests", resp, err, n.Load())
 	}
 }
 

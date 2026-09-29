@@ -103,6 +103,7 @@ the grev family's suffix, as in grev and pickv; for version sort, use sort -V.)`
 		t.Fatalf("%v", err)
 	}
 	e := t.Engine()
+	e.StopOnFail = true // a sort missing comparisons is no sort: stop rather than pay for the rest
 
 	// The seed sees the list (or an even sample of it) so "early" and "late"
 	// mean something.

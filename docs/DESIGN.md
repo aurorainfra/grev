@@ -88,6 +88,18 @@ Answers come back in input order, whatever order the requests finish in. Oversiz
 on their own without failing the run. A 422 context-length error splits the request in half and
 retries.
 
+Failed requests are retried with exponential backoff (from 0.5 s, 7 attempts, about half a
+minute): transport errors, every 5xx including proxies' 52x, 408, 409, 425 and 429, and 2xx bodies
+that aren't the API's JSON. Other 4xx would fail the same way again, so they aren't retried. A
+request that still fails goes to the tool:
+- **On a big run with a terminal** (quoted, or already spent, at `confirmAbove` or more; $1 when
+  that is off) it asks: retry, retry without asking again, skip that request's questions, or stop.
+  The message shows the error (status, body or proxy page title, request id) and the spend so
+  far. No new request starts while it asks. A "retry" also covers the requests that failed in the
+  meantime.
+- **Otherwise** its questions fail, and the tool reports them. Tools that can't use a partial
+  answer (sortv) stop at the first failed request instead of paying for the rest.
+
 ## Safeguards
 
 In order:
