@@ -137,6 +137,18 @@ Manage it with `grev-settings config set limits.daily 5` or
 Command-line flags beat environment variables, which beat the config. In CI, `TYPESAFE_API_KEY`
 supplies the key without any file.
 
+### Through OpenRouter
+
+[OpenRouter](https://openrouter.ai) serves the same Jev API, so the tools run there with your
+OpenRouter key. Point grev at it first, because `key set` checks the key against the configured
+endpoint:
+
+```sh
+grev-settings config set api.endpoint https://openrouter.ai/api
+grev-settings config set api.model jev-latest   # or jev-1.13; the default jev-1.13.0 isn't served there
+grev-settings key set                           # paste your OpenRouter key
+```
+
 ## Cost and safety
 
 Jev charges $0.042 per million input tokens, and output is free. Grepping a 4,000-line source
