@@ -1,7 +1,8 @@
-// Package jevtest is a fake of TypeSafe's System One API for offline tests:
-// POST /v1/systemone answered by a pluggable oracle, GET /v1/models, and
-// knobs to simulate latency, capacity (429), context-length errors (422),
-// transient failures (500) and bad keys (401).
+// Package jevtest is a fake of the System One API for offline tests: POST
+// /v1/systemone answered by a pluggable oracle in TypeSafe's dialect or
+// Fastino's, GET /v1/models (and Fastino's /v1/base-models and
+// /v1/training-jobs), and knobs to simulate latency, capacity (429),
+// context-length errors (422), transient failures (500) and bad keys (401).
 package jevtest
 
 import (
@@ -39,7 +40,13 @@ type Options struct {
 	FailStatus    int                  // status of those failures (default 500)
 	FailBody      string               // their raw body; "" means a JSON detail
 	FailWaitMS    int                  // their retry-after-ms header, so tests needn't sit through backoff (0 = none)
-	Model         string               // model reported in responses (default jev-1.13.0)
+	Model         string               // model reported in responses (default jev-1.13.0, or glide)
+
+	// Dialect "fastino" serves GLiDE's System One: instructions and Noul
+	// criteria must be strings (else 422), a Score's "score" is the winning
+	// level with the weighted one in "expected_level", and usage bills the
+	// state once per question.
+	Dialect string
 }
 
 // Req is one logged POST.
@@ -71,6 +78,9 @@ type Server struct {
 func New(tb testing.TB, o Options) *Server {
 	if o.Oracle == nil {
 		o.Oracle = DefaultOracle
+	}
+	if o.Model == "" && o.Dialect == "fastino" {
+		o.Model = "glide"
 	}
 	if o.Model == "" {
 		o.Model = "jev-1.13.0"
@@ -143,6 +153,13 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet && r.URL.Path == "/v1/base-models" { // Fastino's public catalog
+		writeJSON(w, http.StatusOK, map[string]any{"models": []map[string]any{
+			{"id": "fastino/GLiDE", "description": "fake GLiDE", "task_type": "systemone", "release_month": "2026-09"},
+			{"id": "fastino/GLiNER-2.5-Decide", "description": "fake classifier", "task_type": "encoder"},
+		}})
+		return
+	}
 	if s.o.Key != "" && r.Header.Get("Authorization") != "Bearer "+s.o.Key {
 		if r.Method == http.MethodPost {
 			s.mu.Lock()
@@ -159,6 +176,8 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			{"name": "jev-latest", "description": "fake latest", "release_date": "2026-09-10T00:00:00Z"},
 			{"name": "jev-preview", "description": "fake preview", "release_date": "2026-09-10T00:00:00Z"},
 		}})
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/training-jobs": // needs the key, as on Fastino
+		writeJSON(w, http.StatusOK, map[string]any{"items": []any{}})
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/systemone":
 		s.systemOne(w, r)
 	default:
@@ -240,6 +259,14 @@ func (s *Server) systemOne(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(s.o.Latency())
 	}
 
+	fastino := s.o.Dialect == "fastino"
+	if fastino {
+		if bad := glideInvalid(req); bad != "" {
+			s.record(Req{Status: 422, Questions: len(req.Questions), Bytes: len(body), Model: req.Model})
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "For 'systemone', '" + bad + "' must be a string.", "type": "invalid_request_error"})
+			return
+		}
+	}
 	answers := make(map[string]jev.Answer, len(req.Questions))
 	for id, wq := range req.Questions {
 		q := jev.Question{Type: wq.Type, Instructions: wq.Instructions}
@@ -261,11 +288,46 @@ func (s *Server) systemOne(w http.ResponseWriter, r *http.Request) {
 	}
 	s.record(Req{Status: 200, Questions: len(req.Questions), Bytes: len(body), Model: req.Model, UserAgent: r.UserAgent(),
 		Referer: r.Header.Get("HTTP-Referer"), Title: r.Header.Get("X-OpenRouter-Title"), Categories: r.Header.Get("X-OpenRouter-Categories")})
-	writeJSON(w, http.StatusOK, map[string]any{
-		"model":   s.o.Model,
-		"answers": answers,
-		"usage":   map[string]int{"input_tokens": len(body)/4 + 260, "output_tokens": 20 * len(req.Questions)},
-	})
+	usage := map[string]int{"input_tokens": len(body)/4 + 260, "output_tokens": 20 * len(req.Questions)}
+	var out any = answers
+	if fastino {
+		st, _ := json.Marshal(req.State)
+		in := 0
+		glide := map[string]any{}
+		for id, wq := range req.Questions {
+			q, _ := json.Marshal(wq)
+			in += (len(st)+len(q))/4 + 47
+			b, _ := json.Marshal(answers[id])
+			var m map[string]any
+			json.Unmarshal(b, &m)
+			if a := answers[id]; a.Type == jev.TypeScore {
+				m["score"], m["expected_level"] = int(a.Score+0.5), a.Score
+			}
+			glide[id] = m
+		}
+		usage["input_tokens"], out = in, glide
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"model": s.o.Model, "answers": out, "usage": usage})
+}
+
+// glideInvalid names the first member GLiDE would reject for not being a
+// string: instructions, or a side of a Noul's criteria.
+func glideInvalid(req wireRequest) string {
+	for id, wq := range req.Questions {
+		if _, ok := wq.Instructions.(string); !ok {
+			return "questions." + id + "." + wq.Type + ".instructions"
+		}
+		if wq.Type == jev.TypeNoul && len(wq.Criteria) > 0 {
+			var m map[string]any
+			json.Unmarshal(wq.Criteria, &m)
+			for side, v := range m {
+				if _, ok := v.(string); !ok {
+					return "questions." + id + ".noul.criteria." + side
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // orderedOpts decodes a JSON object keeping member order.
@@ -299,7 +361,11 @@ var (
 // instructions ("text" plus fields), else the state's "document" or "input"
 // member, else the state itself.
 func Subject(state any, q jev.Question) string {
-	if m, ok := q.Instructions.(map[string]any); ok {
+	m, ok := q.Instructions.(map[string]any)
+	if s, isText := q.Instructions.(string); isText {
+		m, ok = members(s), true
+	}
+	if ok {
 		if t, ok := m["text"].(string); ok {
 			var b strings.Builder
 			b.WriteString(t)
@@ -325,6 +391,25 @@ func Subject(state any, q jev.Question) string {
 	}
 	b, _ := json.Marshal(state)
 	return string(b)
+}
+
+// members reads instructions rendered as text by jev.Text ("key: value"
+// lines, continuation lines indented) back into their members.
+func members(s string) map[string]any {
+	m := map[string]any{}
+	last := ""
+	for _, line := range strings.Split(s, "\n") {
+		if rest, ok := strings.CutPrefix(line, "  "); ok && last != "" {
+			m[last] = m[last].(string) + "\n" + rest
+			continue
+		}
+		k, v, ok := strings.Cut(line, ": ")
+		if !ok {
+			continue
+		}
+		m[k], last = v, k
+	}
+	return m
 }
 
 // DefaultOracle answers deterministically from markers in the subject:

@@ -139,10 +139,10 @@ flip it found and warns; --verify re-asks around the result with more context.`
 	for span := float64(n); span > float64(*k); span /= float64(*k + 1) {
 		rounds++
 	}
-	perItem := 0
+	perItem := 0 // billed tokens per question
 	sample := min(n, 200)
 	for j := 0; j < sample; j++ {
-		perItem += item(j*n/sample, *window).Est()
+		perItem += e.Bill(st, item(j*n/sample, *window)) - e.Bill(st)
 	}
 	perItem = perItem/sample + 1
 	questions := min(n, rounds**k+2)
@@ -151,7 +151,7 @@ flip it found and warns; --verify re-asks around the result with more context.`
 		questions += 2
 	}
 	q := jev.Quote{Questions: questions, Requests: rounds,
-		EstTokens: rounds*(jev.EstRequest(nil)+st.Est()) + questions*perItem}
+		EstTokens: rounds*e.Bill(st) + questions*perItem}
 	e.Stats.AddPlan(q)
 	t.Confirm(q)
 

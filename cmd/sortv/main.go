@@ -152,7 +152,7 @@ the grev family's suffix, as in grev and pickv; for version sort, use sort -V.)`
 	if *passes > 0 && n > 1 {
 		probe := pairQ(recs[0], recs[min(1, n-1)], pair{})
 		extra := jev.Quote{Questions: *passes * pairsPerPass, Requests: *passes,
-			EstTokens: *passes * (jev.EstRequest(nil) + pst.Est() + pairsPerPass*probe.Est())}
+			EstTokens: *passes * e.Est(pst, probe, pairsPerPass)}
 		e.Stats.AddPlan(extra)
 		q.Questions += extra.Questions
 		q.Requests += extra.Requests

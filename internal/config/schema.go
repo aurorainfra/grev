@@ -22,7 +22,8 @@ var Schema = []Key{
 	{"api", "", "key", "string", "", "The API key. `grev-settings key set` stores it here and keeps the file mode 0600."},
 	{"api", "", "keyCommand", "command", "", "Instead of api.key: run this command and use its standard output as the key (sh -c; cmd /C on Windows), e.g. `pass show typesafe/api`."},
 	{"api", "", "endpoint", "string", "https://api.typesafe.ai", "API root. TYPESAFE_BASE_URL overrides it."},
-	{"api", "", "model", "string", "jev-1.13.0", "Model id. -M and TYPESAFE_DEFAULT_MODEL override it."},
+	{"api", "", "model", "string", "jev-1.13.0", "Model id. -M and TYPESAFE_DEFAULT_MODEL override it. Unset, it is the API's default: jev-1.13.0, or fastino/GLiDE on Fastino."},
+	{"api", "", "protocol", "protocol", "auto", "The decision API's dialect: typesafe (TypeSafe's Jev, also through OpenRouter), fastino (Fastino's GLiDE), or auto, which goes by the endpoint and the model id."},
 	{"api", "", "attribution", "bool", "true", "Send OpenRouter's app-attribution headers (HTTP-Referer, X-OpenRouter-Title, X-OpenRouter-Categories), which credit requests to grev in its rankings. The User-Agent names grev either way."},
 
 	{"defaults", "", "progress", "enum", "never", "Show the -p overlay: always, never, or auto (when stderr is a terminal)."},
@@ -113,6 +114,12 @@ func checkType(k Key, raw string) error {
 			return nil
 		}
 		return fmt.Errorf("want always, never or auto, got %q", raw)
+	case "protocol":
+		switch strings.ToLower(raw) {
+		case "auto", "typesafe", "fastino":
+			return nil
+		}
+		return fmt.Errorf("want auto, typesafe or fastino, got %q", raw)
 	}
 	return nil
 }

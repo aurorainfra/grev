@@ -30,6 +30,32 @@ by up to 2.5× on logs. ANSI escape sequences and control characters (except tab
 stripped from everything the model reads. They cost tokens and carry no meaning. Output is not
 affected.
 
+### Other servers of the same API
+
+The tools speak only that model: a state, typed questions, typed answers. What differs between
+servers sits behind one interface in `internal/jev/protocol.go`, a **protocol**. It decides how a
+request goes over the wire, what it is billed for, how large it may be, how its models are
+listed, and how a key is checked. `api.protocol` picks one; by default the endpoint and model id
+do.
+- **`typesafe`:** TypeSafe's Jev, also through OpenRouter. This is the reference dialect above.
+- **`fastino`:** Fastino's GLiDE (`fastino/GLiDE`). It takes the same requests, with differences:
+  - **Instructions only as text.** Structured questions are rendered as `key: value` lines, the
+    question last. On the eval sets this scored as well as JSON text, the question first, or the
+    record as the state.
+  - **Noul criteria must be strings.**
+  - **Score:** GLiDE's `score` is the winning level, so the weighted level grev uses is read from
+    `expected_level`.
+  - **Billing:** GLiDE bills the state once per question, at $0.30 per million tokens. A Score
+    over three or more levels "thinks": about three passes, plus a thought that grows with its
+    uncertainty. Quotes include both.
+  - **Listing and checks:** its model lists are public, so models come from the catalog's System
+    One entries, and the key check reads the account's training jobs.
+
+  Fastino's GLiNER classifiers answer through chat completions, a different API, and are not
+  supported.
+
+A new server or dialect is a new protocol; the tools don't change.
+
 Jev can't generate text. The grev tools lean into that and act like classic filters. They
 select, reorder, split, route or annotate input, so **output is input**. Model labels and
 probabilities appear only as explicit columns. There are two deliberate normalizations: CRLF comes
@@ -156,7 +182,7 @@ lock file. Parallel invocations can overshoot a cap by at most what they already
 cmd/<tool>/        one small main per tool
 internal/cli/      getopt, common flags, config defaults, safeguards and ledger, records, progress, man/completions
 internal/config/   ~/.grevconfig: git-config parser/writer, schema
-internal/jev/      API types and client, credentials, pricing, packing, scheduler, engine
+internal/jev/      API types, client and protocols, credentials, pricing, packing, scheduler, engine
 internal/skill/    installs the agent skill for Claude Code and ~/.agents/skills agents
 internal/jevtest/  fake API for offline tests
 skills/grev/       the agent skill (SKILL.md), embedded in grev-settings and shipped in packages

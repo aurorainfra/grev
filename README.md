@@ -149,6 +149,19 @@ grev-settings config set api.model jev-latest   # or jev-1.13; the default jev-1
 grev-settings key set                           # paste your OpenRouter key
 ```
 
+### Through Fastino
+
+[Fastino](https://fastino.ai) serves the same decision API with its GLiDE model:
+
+```sh
+grev-settings config set api.endpoint https://api.fastino.ai
+grev-settings config set api.model fastino/GLiDE
+grev-settings key set                           # paste your Fastino key
+```
+
+GLiDE costs $0.30 per million input tokens and bills the shared context once per question, so
+runs cost several times more than on Jev; quotes account for it.
+
 ## Cost and safety
 
 Jev charges $0.042 per million input tokens, and output is free. Grepping a 4,000-line source

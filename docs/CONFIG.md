@@ -33,7 +33,7 @@ Mistakes are reported with `file:line`:
 
 **command-line flag > environment variable > config (`[tool "x"]` over `[defaults]`) > built-in
 default.** For example, `-M` beats `TYPESAFE_DEFAULT_MODEL`, which beats `api.model`, which beats
-the pinned `jev-1.13.0`. Boolean options can be switched off for one run with `--no-<flag>`
+the API's default: the pinned `jev-1.13.0`, or `fastino/GLiDE` on Fastino. Boolean options can be switched off for one run with `--no-<flag>`
 (`--no-progress`, `--no-scores`); amounts take `off` (`--max-cost=off`, `--confirm-above=off`).
 
 ## The API key
@@ -102,6 +102,18 @@ Requests carry OpenRouter's [app-attribution](https://openrouter.ai/docs/app-att
 headers, so the usage counts toward grev in its rankings; they identify the project, as the
 User-Agent already does, and nothing about you. Set `attribution = false` under `[api]` to leave
 them out.
+
+Through Fastino's GLiDE, which serves the same API with a few differences that grev adapts to
+(it costs $0.30 per million input tokens and bills the shared context once per question):
+
+```ini
+[api]
+	endpoint = https://api.fastino.ai
+	model = fastino/GLiDE    ; also the default on Fastino
+```
+
+grev tells the servers' dialects apart by the endpoint and the model id. Behind a gateway that
+hides which one it is, set `protocol = typesafe` or `protocol = fastino` under `[api]`.
 
 A model the built-in price table doesn't know yet:
 

@@ -89,6 +89,7 @@ const (
 // Engine packs items into requests and runs them through the scheduler.
 type Engine struct {
 	Client  *Client
+	Proto   Protocol // how requests go over the wire and are billed
 	Model   string
 	Sched   *Sched
 	Stats   *Stats
@@ -118,7 +119,7 @@ type Engine struct {
 
 // NewEngine wires a client and scheduler with fresh stats.
 func NewEngine(c *Client, model string, s *Sched) *Engine {
-	e := &Engine{Client: c, Model: model, Sched: s, Stats: NewStats(), MaxQ: DefaultMaxQ}
+	e := &Engine{Client: c, Proto: ProtocolFor("", c.BaseURL, model), Model: model, Sched: s, Stats: NewStats(), MaxQ: DefaultMaxQ}
 	e.Stats.s.Model = model
 	if v, err := strconv.Atoi(os.Getenv("GREV_MAX_Q")); err == nil && v > 0 {
 		e.MaxQ = v
@@ -132,19 +133,26 @@ func NewEngine(c *Client, model string, s *Sched) *Engine {
 	return e
 }
 
+// batch is one request in the making. est is the size of its body (the
+// state once, plus the questions), which the context limits apply to; bill
+// is the input tokens it will be billed for, which quotes, budgets and rate
+// limits count. They differ where the state is billed per question.
 type batch struct {
 	seq   int
 	state *State
 	items []*Item
 	est   int
+	bill  int
 }
 
-func (b *batch) add(it *Item) {
+func (b *batch) add(it *Item, p Protocol) {
 	if len(b.items) == 0 {
 		b.est = reqOverhead + b.state.est
+		b.bill = p.Base(b.state.est)
 	}
 	b.items = append(b.items, it)
 	b.est += it.est
+	b.bill += p.Per(b.state.est, it)
 }
 
 // fits reports whether it can join b within budget. An item that cannot fit
@@ -153,11 +161,42 @@ func (e *Engine) fits(b *batch, it *Item) bool {
 	if b.state != it.State || len(b.items) >= e.MaxQ {
 		return false
 	}
-	return b.est+it.est <= int(CtxTotal*safety)
+	return b.est+it.est <= int(float64(e.proto().Limits().CtxTotal)*safety)
 }
 
-func tooBig(it *Item) bool {
-	return reqOverhead+it.State.est+it.est > int(CtxStateQ*safety)
+func (e *Engine) tooBig(it *Item) bool {
+	return reqOverhead+it.State.est+it.est > int(float64(e.proto().Limits().CtxStateQ)*safety)
+}
+
+// proto is the engine's protocol; an Engine built without one speaks
+// TypeSafe's.
+func (e *Engine) proto() Protocol {
+	if e.Proto == nil {
+		return TypeSafe
+	}
+	return e.Proto
+}
+
+// SizedState is a placeholder state of an estimated size, for quoting rounds
+// whose state isn't built yet.
+func SizedState(est int) *State { return &State{est: est} }
+
+// Est is the input tokens n questions like probe, asked in one request about
+// st, would be billed for: for quoting rounds not yet built.
+func (e *Engine) Est(st *State, probe *Item, n int) int {
+	if n == 0 {
+		return e.proto().Base(st.est)
+	}
+	return e.proto().Base(st.est) + n*e.proto().Per(st.est, probe)
+}
+
+// Bill is the input tokens one request asking items about st would be billed for.
+func (e *Engine) Bill(st *State, items ...*Item) int {
+	n := e.proto().Base(st.est)
+	for _, it := range items {
+		n += e.proto().Per(st.est, it)
+	}
+	return n
 }
 
 // Quote is the plan for a known set of items.
@@ -174,11 +213,11 @@ func (e *Engine) Plan(items []*Item) Quote {
 	var q Quote
 	var cur *batch
 	for _, it := range items {
-		if tooBig(it) {
+		if e.tooBig(it) {
 			// pack sends the current batch before an oversize item.
 			if cur != nil {
 				q.Requests++
-				q.EstTokens += cur.est
+				q.EstTokens += cur.bill
 				cur = nil
 			}
 			q.TooBig++
@@ -187,16 +226,16 @@ func (e *Engine) Plan(items []*Item) Quote {
 		if cur == nil || !e.fits(cur, it) {
 			if cur != nil {
 				q.Requests++
-				q.EstTokens += cur.est
+				q.EstTokens += cur.bill
 			}
 			cur = &batch{state: it.State}
 		}
-		cur.add(it)
+		cur.add(it, e.proto())
 		q.Questions++
 	}
 	if cur != nil {
 		q.Requests++
-		q.EstTokens += cur.est
+		q.EstTokens += cur.bill
 	}
 	e.Stats.plan(q)
 	return q
@@ -226,13 +265,13 @@ func (e *Engine) Run(ctx context.Context, in <-chan *Item, flush time.Duration, 
 	go func() {
 		defer func() { wg.Wait(); close(results) }()
 		for b := range batches {
-			if e.MaxCost > 0 && e.Stats.committedCost(e.Model, b.est) > e.MaxCost {
+			if e.MaxCost > 0 && e.Stats.committedCost(e.Model, b.bill) > e.MaxCost {
 				budgetHit = true
 				stopPacking()
 				break
 			}
 			if e.Budget != nil {
-				if rem := e.Budget(); rem >= 0 && e.Stats.pendingCost(e.Model, b.est) > rem {
+				if rem := e.Budget(); rem >= 0 && e.Stats.pendingCost(e.Model, b.bill) > rem {
 					budgetHit = true
 					stopPacking()
 					break
@@ -241,13 +280,13 @@ func (e *Engine) Run(ctx context.Context, in <-chan *Item, flush time.Duration, 
 			e.hold.RLock() // wait out an OnFail decision
 			e.hold.RUnlock()
 			e.Stats.queued(1)
-			if err := e.Sched.Acquire(ctx, b.est); err != nil {
+			if err := e.Sched.Acquire(ctx, b.bill); err != nil {
 				e.Stats.queued(-1)
 				stopPacking()
 				break
 			}
 			e.Stats.queued(-1)
-			e.Stats.start(b.est)
+			e.Stats.start(b.bill)
 			wg.Add(1)
 			go func(b *batch) {
 				defer wg.Done()
@@ -322,7 +361,7 @@ func (e *Engine) pack(ctx context.Context, in <-chan *Item, flush time.Duration,
 				send()
 				return
 			}
-			if cur != nil && (tooBig(it) || !e.fits(cur, it)) {
+			if cur != nil && (e.tooBig(it) || !e.fits(cur, it)) {
 				if !send() {
 					return
 				}
@@ -333,8 +372,8 @@ func (e *Engine) pack(ctx context.Context, in <-chan *Item, flush time.Duration,
 					timer = time.After(flush)
 				}
 			}
-			cur.add(it)
-			if tooBig(it) && !send() {
+			cur.add(it, e.proto())
+			if e.tooBig(it) && !send() {
 				return
 			}
 		}
@@ -353,11 +392,11 @@ func failAll(items []*Item, err error) []Result {
 // splitting it on context-length errors, and returns per-item results. A
 // non-nil error is fatal for the whole run.
 func (e *Engine) runBatch(ctx context.Context, b *batch) ([]Result, error) {
-	if len(b.items) == 1 && tooBig(b.items[0]) {
+	if len(b.items) == 1 && e.tooBig(b.items[0]) {
 		e.Sched.Release(0, 0)
-		e.Stats.finish(1, b.est, 1)
+		e.Stats.finish(1, b.bill, 1)
 		return failAll(b.items, fmt.Errorf("%w: record too large for one request (≈%d tokens; limit %d)",
-			ErrTooLarge, reqOverhead+b.state.est+b.items[0].est, CtxStateQ)), nil
+			ErrTooLarge, reqOverhead+b.state.est+b.items[0].est, e.proto().Limits().CtxStateQ)), nil
 	}
 
 	req := &Request{State: b.state.V, Model: e.Model, Questions: make(map[string]Question, len(b.items))}
@@ -365,7 +404,7 @@ func (e *Engine) runBatch(ctx context.Context, b *batch) ([]Result, error) {
 		req.Questions["q"+strconv.Itoa(i)] = it.Q
 	}
 	t0 := time.Now()
-	resp, err := e.Client.Do(ctx, req)
+	resp, err := e.proto().Do(ctx, e.Client, req)
 	lat := time.Since(t0)
 	if err != nil {
 		e.Sched.Release(0, 0)
@@ -373,10 +412,10 @@ func (e *Engine) runBatch(ctx context.Context, b *batch) ([]Result, error) {
 		if errors.As(err, &ae) {
 			switch {
 			case ae.Status == 401 || ae.Status == 403 || ae.Status == 404:
-				e.Stats.finish(len(b.items), b.est, len(b.items))
+				e.Stats.finish(len(b.items), b.bill, len(b.items))
 				return failAll(b.items, err), err
 			case IsOverLimit(ae) && len(b.items) > 1:
-				e.Stats.finish(0, b.est, 0) // the rejected request
+				e.Stats.finish(0, b.bill, 0) // the rejected request
 				return e.split(ctx, b)
 			case IsOverLimit(ae):
 				err = fmt.Errorf("%w (≈%d tokens estimated): %w", ErrTooLarge, b.est, ae)
@@ -385,23 +424,23 @@ func (e *Engine) runBatch(ctx context.Context, b *batch) ([]Result, error) {
 		if ctx.Err() == nil && !errors.Is(err, ErrTooLarge) {
 			switch e.onFail(ctx, err, len(b.items)) {
 			case FailRetry:
-				e.Stats.finish(0, b.est, 0) // the failed request
-				if err := e.Sched.Acquire(ctx, b.est); err != nil {
+				e.Stats.finish(0, b.bill, 0) // the failed request
+				if err := e.Sched.Acquire(ctx, b.bill); err != nil {
 					e.Stats.finish(len(b.items), 0, len(b.items))
 					return failAll(b.items, context.Cause(ctx)), nil
 				}
-				e.Stats.start(b.est)
+				e.Stats.start(b.bill)
 				return e.runBatch(ctx, b)
 			case FailStop:
 				err = fmt.Errorf("%w: %w", ErrStopped, err)
-				e.Stats.finish(len(b.items), b.est, len(b.items))
+				e.Stats.finish(len(b.items), b.bill, len(b.items))
 				return failAll(b.items, err), err
 			}
 		}
 		if ctx.Err() != nil {
 			err = context.Cause(ctx)
 		}
-		e.Stats.finish(len(b.items), b.est, len(b.items))
+		e.Stats.finish(len(b.items), b.bill, len(b.items))
 		return failAll(b.items, err), nil
 	}
 	e.Sched.Release(lat, resp.Usage.InputTokens)
@@ -421,7 +460,7 @@ func (e *Engine) runBatch(ctx context.Context, b *batch) ([]Result, error) {
 		}
 		res[i] = Result{Item: it, Answer: a}
 	}
-	e.Stats.finishOK(len(b.items), b.est, resp.Usage.InputTokens, cost, known, model, missing)
+	e.Stats.finishOK(len(b.items), b.bill, resp.Usage.InputTokens, cost, known, model, missing)
 	return res, nil
 }
 
@@ -453,13 +492,13 @@ func (e *Engine) split(ctx context.Context, b *batch) ([]Result, error) {
 	for i, part := range [][]*Item{b.items[:mid], b.items[mid:]} {
 		h := &batch{seq: b.seq, state: b.state}
 		for _, it := range part {
-			h.add(it)
+			h.add(it, e.proto())
 		}
-		if err := e.Sched.Acquire(ctx, h.est); err != nil {
+		if err := e.Sched.Acquire(ctx, h.bill); err != nil {
 			rest := b.items[mid*i:]
 			return append(res, failAll(rest, err)...), nil
 		}
-		e.Stats.start(h.est)
+		e.Stats.start(h.bill)
 		r, fatal := e.runBatch(ctx, h)
 		res = append(res, r...)
 		if fatal != nil {

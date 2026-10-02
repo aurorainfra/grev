@@ -1,6 +1,7 @@
-// Package jev is a small client for TypeSafe's System One API (Jev models):
-// request/answer types, credentials, pricing, request packing, scheduling and
-// a parallel engine that returns answers in submission order.
+// Package jev is a small client for the System One decision API (TypeSafe's
+// Jev models, Fastino's GLiDE): request/answer types, the protocols that
+// adapt them to each server, credentials, pricing, request packing,
+// scheduling and a parallel engine that returns answers in submission order.
 package jev
 
 import (
@@ -101,11 +102,14 @@ type Request struct {
 
 // Answer is one typed answer; which fields are set depends on Type.
 type Answer struct {
-	Type          string             `json:"type"`
-	Noul          float64            `json:"noul,omitempty"`
-	Choice        string             `json:"choice,omitempty"`
-	Score         float64            `json:"score,omitempty"`
-	Confidence    float64            `json:"confidence,omitempty"`
+	Type       string  `json:"type"`
+	Noul       float64 `json:"noul,omitempty"`
+	Choice     string  `json:"choice,omitempty"`
+	Score      float64 `json:"score,omitempty"`
+	Confidence float64 `json:"confidence,omitempty"`
+	// ExpectedLevel is GLiDE's name for the probability-weighted level that
+	// Jev reports as Score (GLiDE's own score is the winning level).
+	ExpectedLevel *float64           `json:"expected_level,omitempty"`
 	Probabilities map[string]float64 `json:"probabilities,omitempty"`
 	Legend        map[string]string  `json:"legend,omitempty"`
 }

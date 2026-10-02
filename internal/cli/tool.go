@@ -59,16 +59,28 @@ func Attribution() http.Header {
 	}
 }
 
-// NewClient returns an API client for key: the endpoint from TYPESAFE_BASE_URL
-// or api.endpoint, the tool's User-Agent, and the attribution headers unless
-// api.attribution is false.
-func NewClient(cfg *config.Config, key, tool string) *jev.Client {
-	c := jev.NewClient(key, UserAgent(tool))
-	if os.Getenv("TYPESAFE_BASE_URL") == "" {
-		if ep := cfg.Str("api", "", "endpoint"); ep != "" {
-			c.BaseURL = strings.TrimRight(ep, "/")
+// Endpoint is the API root: TYPESAFE_BASE_URL, else api.endpoint, else
+// TypeSafe's.
+func Endpoint(cfg *config.Config) string {
+	for _, ep := range []string{os.Getenv("TYPESAFE_BASE_URL"), cfg.Str("api", "", "endpoint")} {
+		if ep != "" {
+			return strings.TrimRight(ep, "/")
 		}
 	}
+	return jev.DefaultBaseURL
+}
+
+// Protocol is the decision API's dialect at cfg's endpoint for model ("" if
+// none is set): api.protocol, else a guess from the endpoint and the model.
+func Protocol(cfg *config.Config, model string) jev.Protocol {
+	return jev.ProtocolFor(cfg.Str("api", "", "protocol"), Endpoint(cfg), model)
+}
+
+// NewClient returns an API client for key: the Endpoint, the tool's
+// User-Agent, and the attribution headers unless api.attribution is false.
+func NewClient(cfg *config.Config, key, tool string) *jev.Client {
+	c := jev.NewClient(key, UserAgent(tool))
+	c.BaseURL = Endpoint(cfg)
 	if v, ok := cfg.Get("api", "", "attribution"); !ok || !isFalse(v.Raw) {
 		c.Header = Attribution()
 	}
@@ -160,7 +172,7 @@ func New(name string) *Tool {
 		func(s string) error { return parseUSD(s, &t.confirmAbove, -1) })
 	p.Func('J', "jobs", "N|max", "parallel requests: a number, or 'max' to adapt to the server (default 4)",
 		func(s string) error { t.j = s; return nil })
-	p.Func('M', "model", "MODEL", "model id (default: api.model, $TYPESAFE_DEFAULT_MODEL, or "+jev.DefaultModel+")",
+	p.Func('M', "model", "MODEL", "model id (default: api.model, $TYPESAFE_DEFAULT_MODEL, or the API's default: "+jev.DefaultModel+", or "+jev.Fastino.DefaultModel()+" on Fastino)",
 		func(s string) error { t.model = s; return nil })
 	p.Func(0, "max-cost", "USD", "per-run budget: refuse or stop once spend would exceed USD; 'off' for none",
 		func(s string) error { return parseUSD(s, &t.maxCost, 0) })
@@ -334,13 +346,26 @@ func (t *Tool) Quoting() bool { return t.quote }
 // Model is the model the tool will use: -M, TYPESAFE_DEFAULT_MODEL,
 // api.model, then the pinned default.
 func (t *Tool) Model() string {
-	if t.model == "" && os.Getenv("TYPESAFE_DEFAULT_MODEL") == "" {
-		if m := t.cfg.Str("api", "", "model"); m != "" {
-			return m
-		}
+	if m := t.askedModel(); m != "" {
+		return m
 	}
-	return jev.Model(t.model)
+	return t.Protocol().DefaultModel()
 }
+
+// askedModel is the model asked for: -M, then TYPESAFE_DEFAULT_MODEL, then
+// api.model; "" when none is.
+func (t *Tool) askedModel() string {
+	if t.model != "" {
+		return t.model
+	}
+	if m := os.Getenv("TYPESAFE_DEFAULT_MODEL"); m != "" {
+		return m
+	}
+	return t.cfg.Str("api", "", "model")
+}
+
+// Protocol is the decision API's dialect this tool speaks (see Protocol).
+func (t *Tool) Protocol() jev.Protocol { return Protocol(t.cfg, t.askedModel()) }
 
 // KeyConfig is the api.key / api.keyCommand setting.
 func (t *Tool) KeyConfig() jev.KeyConfig { return KeyConfigFrom(t.cfg) }
@@ -403,6 +428,7 @@ func (t *Tool) Engine() *Engine {
 	sched := jev.NewSched(n, adaptive)
 	sched.SetRates(t.cfgFloat("limits", "rpm"), t.cfgFloat("limits", "tps"))
 	t.eng = jev.NewEngine(c, t.Model(), sched)
+	t.eng.Proto = t.Protocol()
 	if q := int(t.cfgFloat("limits", "questionsPerRequest")); q > 0 && os.Getenv("GREV_MAX_Q") == "" {
 		t.eng.MaxQ = q
 	}
@@ -481,7 +507,7 @@ func (t *Tool) Confirm(q jev.Quote) {
 	}
 	p, known := jev.PriceOf(e.Model)
 	if !known {
-		p, _ = jev.PriceOf(jev.DefaultModel) // estimate with the default model's price
+		p, _ = jev.PriceOf(e.Proto.DefaultModel()) // estimate with the default model's price
 	}
 	cost := float64(q.EstTokens) * p.In / 1e6
 	refuse := func(format string, a ...any) {
@@ -506,7 +532,7 @@ func (t *Tool) Confirm(q jev.Quote) {
 	t.pauseProgress(func() {
 		printQuote(os.Stderr, t.Name, e, q)
 		if !known {
-			fmt.Fprintf(os.Stderr, "%*sprice of %s unknown; estimated at %s's price\n", len(t.Name)+8, "", e.Model, jev.DefaultModel)
+			fmt.Fprintf(os.Stderr, "%*sprice of %s unknown; estimated at %s's price\n", len(t.Name)+8, "", e.Model, e.Proto.DefaultModel())
 		}
 		ok, err := askYes(t.Ctx(), "Proceed? [y/N] ")
 		switch {
@@ -691,7 +717,7 @@ func (t *Tool) Ask(state any, names []string, qs []jev.Question) map[string]jev.
 	q := e.Plan(items)
 	if q.TooBig > 0 {
 		t.Fatalf("input is too large for one request (≈%s tokens; the state plus a question must fit in %s)",
-			fmtTokens(st.Est()), fmtTokens(jev.CtxStateQ))
+			fmtTokens(st.Est()), fmtTokens(e.Proto.Limits().CtxStateQ))
 	}
 	t.Confirm(q)
 	out := map[string]jev.Answer{}

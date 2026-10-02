@@ -164,7 +164,7 @@ func TestJevKey(t *testing.T) {
 
 	r = run(t, env, "", "grev-settings", "key", "status")
 	if r.Code != 0 || !strings.Contains(r.Stdout, "source: api.key (~/.grevconfig:2)") ||
-		!strings.Contains(r.Stdout, "key:    …5b4a") || !strings.Contains(r.Stdout, "check:  ok (2 models") {
+		!strings.Contains(r.Stdout, "key:    …5b4a") || !strings.Contains(r.Stdout, "check:  ok (2 decision models") {
 		t.Fatalf("status from config: %+v", r)
 	}
 	noLeak(t, r, key)

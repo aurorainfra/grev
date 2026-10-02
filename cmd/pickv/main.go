@@ -233,8 +233,13 @@ func linesMode(t *cli.Tool, o opts, question, file string, m cli.RecMode) {
 							final += c.tok
 						}
 					}
+					fst := jev.SizedState(int(final))
+					var fopts jev.Opts
+					for i := 0; i < keepPerWindow*len(wins); i++ {
+						fopts = append(fopts, jev.Opt{Key: id(i)})
+					}
 					q.Requests++
-					q.EstTokens += jev.EstRequest(nil) + int(final) + keepPerWindow*len(wins)*8
+					q.EstTokens += e.Bill(fst, jev.NewItem(fst, jev.Choice(fmt.Sprintf(where, question), fopts), nil))
 				}
 				t.Confirm(q)
 			}

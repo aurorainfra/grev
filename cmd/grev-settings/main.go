@@ -274,7 +274,11 @@ func keyCmd(t *cli.Tool, sub string, check bool) {
 				fmt.Printf("check:  FAILED: %v\n", err)
 				t.Exit(cli.ExitNo)
 			}
-			fmt.Printf("check:  ok (%d models available)\n", n)
+			models := "decision models"
+			if n == 1 {
+				models = "decision model"
+			}
+			fmt.Printf("check:  ok (%d %s available)\n", n, models)
 		}
 	default:
 		t.P.Usagef("unknown key command %q", sub)
@@ -328,7 +332,11 @@ func verify(t *cli.Tool, key string) (int, error) {
 	c := cli.NewClient(t.Config(), key, "grev-settings")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	ms, err := c.Models(ctx)
+	p := t.Protocol()
+	if err := p.Check(ctx, c); err != nil {
+		return 0, err
+	}
+	ms, err := p.Models(ctx, c)
 	return len(ms), err
 }
 
@@ -392,7 +400,7 @@ func spend(t *cli.Tool, days int) {
 
 func models(t *cli.Tool) {
 	e := t.Engine()
-	ms, err := e.Client.Models(t.Ctx())
+	ms, err := e.Proto.Models(t.Ctx(), e.Client)
 	if err != nil {
 		t.Exit(t.Finish(err))
 	}
@@ -400,7 +408,7 @@ func models(t *cli.Tool) {
 		fmt.Fprintf(t.Out, "%-14s %-10.10s  %s\n", m.Name, m.ReleaseDate, m.Description)
 	}
 	if len(ms) == 0 {
-		t.Warnf("no Jev models listed by this endpoint; gateways often do not enumerate them, so set the model explicitly (e.g. -M jev-latest)")
+		t.Warnf("no decision models listed by this endpoint; gateways often do not enumerate them, so set the model explicitly (e.g. -M %s)", e.Proto.DefaultModel())
 	}
 }
 
@@ -524,11 +532,19 @@ func raw(t *cli.Tool, args []string) {
 		}
 		b = []byte(`{"model":` + string(m) + sep + rest)
 	}
-	nq := 0
+	// Quote it as the protocol bills it (Fastino bills the state per question).
+	st := jev.NewState(req["state"])
+	var items []*jev.Item
 	if qs, ok := req["questions"].(map[string]any); ok {
-		nq = len(qs)
+		for _, v := range qs {
+			var q jev.Question
+			if raw, err := json.Marshal(v); err == nil && json.Unmarshal(raw, &q) == nil {
+				items = append(items, jev.NewItem(st, q, nil))
+			}
+		}
 	}
-	t.Confirm(jev.Quote{Questions: nq, Requests: 1, EstTokens: jev.EstRequest(b)})
+	nq := len(items)
+	t.Confirm(jev.Quote{Questions: nq, Requests: 1, EstTokens: max(e.Bill(st, items...), jev.EstRequest(b))})
 	out, err := e.Client.Raw(t.Ctx(), "POST", "/v1/systemone", b)
 	if err != nil {
 		t.Exit(t.Finish(err))

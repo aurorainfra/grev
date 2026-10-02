@@ -11,14 +11,17 @@ import (
 const DefaultModel = "jev-1.13.0"
 
 // Model returns the model to use: flag, then TYPESAFE_DEFAULT_MODEL, then DefaultModel.
-func Model(flag string) string {
+func Model(flag string) string { return ModelFor(flag, TypeSafe) }
+
+// ModelFor is Model with p's default model as the fallback.
+func ModelFor(flag string, p Protocol) string {
 	if flag != "" {
 		return flag
 	}
 	if m := os.Getenv("TYPESAFE_DEFAULT_MODEL"); m != "" {
 		return m
 	}
-	return DefaultModel
+	return p.DefaultModel()
 }
 
 // Price is USD per million tokens.
@@ -33,6 +36,7 @@ var prices = map[string]Price{
 	"jev-1.12":    {In: 0.042},
 	"jev-latest":  {In: 0.042},
 	"jev-preview": {In: 0.042},
+	"glide":       {In: 0.30}, // Fastino's GLiDE, reported as "glide"
 }
 
 // SetPrice sets the price of a model id (or id prefix), e.g. from a
@@ -67,11 +71,13 @@ func PriceOf(model string) (p Price, ok bool) {
 	return Price{}, false
 }
 
-// priceOf matches one id against the table by longest prefix.
+// priceOf matches one id against the table by longest prefix, ignoring case
+// ("fastino/GLiDE" is billed as "glide").
 func priceOf(model string) (p Price, ok bool) {
 	best := -1
+	model = strings.ToLower(model)
 	for prefix, pr := range prices {
-		if strings.HasPrefix(model, prefix) && len(prefix) > best {
+		if strings.HasPrefix(model, strings.ToLower(prefix)) && len(prefix) > best {
 			p, best = pr, len(prefix)
 		}
 	}
