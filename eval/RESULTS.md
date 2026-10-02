@@ -29,3 +29,33 @@ Decisions:
 
 Measured request framing: about 262 tokens per request plus about 7 per question
 (`internal/jev/engine.go`). Estimates run about 8% above actual usage.
+
+## Fastino GLiDE
+
+Model `fastino/GLiDE`, 2026-10-02, the same sets, run with
+`TYPESAFE_DEFAULT_MODEL=fastino/GLiDE make eval` against `api.endpoint = https://api.fastino.ai`
+(about $0.03).
+
+| variant (mean over sets)                          | acc@0.5 | acc@best-T | AUC   |
+|---------------------------------------------------|--------:|-----------:|------:|
+| record in question, predicate template + about    | 0.990   | 0.990      | 1.000 |
+| record as the state, plain question               | 0.990   | 1.000      | 1.000 |
+| question first, then `text: …`                    | 0.990   | 1.000      | 1.000 |
+| same, 8 questions per request (vs 128)            | 0.990   | 0.990      | 0.990 |
+| record in question, as JSON text                  | 0.980   | 0.990      | 0.994 |
+| record in question, natural `{}` question         | 0.970   | 0.990      | 0.996 |
+| record in question, predicate template            | 0.970   | 0.990      | 0.990 |
+| record in question, statement template            | 0.970   | 0.990      | 0.983 |
+| record in question, natural `{}` question + about | 0.960   | 0.980      | 0.993 |
+| all records in state, question points at `lines[i]` | 0.773 | 0.840      | 0.908 |
+
+Decisions:
+
+- **The Fastino protocol's `key: value` rendering stays.** GLiDE takes instructions only as
+  text. Rendering grev's structured questions as `key: value` lines scored as well as JSON text,
+  the question first, or the record as the state. All of these differ by about one record per set.
+- **GLiDE matches or beats Jev on these sets.** It scored 0.96–0.99 at 0.5 where Jev scored
+  0.93–0.98, and it is just as poor at addressing records by path. Go function signatures
+  (`gofunc`) are the hard set for both.
+- **It costs more.** The state is billed once per question at $0.30 per million tokens, so this
+  run cost about 15× the Jev run.

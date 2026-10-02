@@ -9,6 +9,7 @@ package eval
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -105,6 +106,33 @@ var variants = []variant{
 	{"in-question/predicate/maxq=8", 8, inQuestion(func(d dataset) string {
 		return "Is it true that `text` " + d.query + "?"
 	})},
+	// How GLiDE, which takes instructions only as text, reads them best: the
+	// protocol's own "key: value" rendering is what the variants above get.
+	{"glide/json-text", 128, func(d dataset) []*jev.Item {
+		st := jev.NewState("Each question carries its own text to judge.")
+		items := make([]*jev.Item, len(d.texts))
+		for i, text := range d.texts {
+			b, _ := json.Marshal(cli.Instr(cli.Rec{Text: text}, "Is it true that `text` "+d.query+"?"))
+			items[i] = jev.NewItem(st, jev.Noul(string(b), nil, nil), i)
+		}
+		return items
+	}},
+	{"glide/question-first", 128, func(d dataset) []*jev.Item {
+		st := jev.NewState("Each question carries its own text to judge.")
+		items := make([]*jev.Item, len(d.texts))
+		for i, text := range d.texts {
+			q := "Is it true that the text " + d.query + "?\n\ntext: " + text
+			items[i] = jev.NewItem(st, jev.Noul(q, nil, nil), i)
+		}
+		return items
+	}},
+	{"glide/record-as-state", 1, func(d dataset) []*jev.Item {
+		items := make([]*jev.Item, len(d.texts))
+		for i, text := range d.texts {
+			items[i] = jev.NewItem(jev.NewState(text), jev.Noul("Is it true that this text "+d.query+"?", nil, nil), i)
+		}
+		return items
+	}},
 	{"state-array/path", 128, func(d dataset) []*jev.Item {
 		st := jev.NewState(jev.Obj{{K: "lines", V: d.texts}})
 		items := make([]*jev.Item, len(d.texts))
@@ -127,7 +155,18 @@ func TestEval(t *testing.T) {
 	for _, p := range paths {
 		sets = append(sets, load(t, p))
 	}
-	client := jev.NewClient(key.Value, "grev-eval/"+cli.Version)
+	// The endpoint, protocol and model as the tools would pick them, so a key
+	// only ever goes to the endpoint it was configured for.
+	client := cli.NewClient(cfg, key.Value, "grev-eval")
+	model := os.Getenv("TYPESAFE_DEFAULT_MODEL")
+	if model == "" {
+		model = cfg.Str("api", "", "model")
+	}
+	proto := cli.Protocol(cfg, model)
+	if model == "" {
+		model = proto.DefaultModel()
+	}
+	fmt.Printf("\nmodel %s at %s (%s protocol)\n", model, client.BaseURL, proto.Name())
 	var spent float64
 
 	fmt.Printf("\n%-30s %-8s %6s %6s %6s %6s %6s %6s %8s\n",
@@ -137,7 +176,8 @@ func TestEval(t *testing.T) {
 	for _, v := range variants {
 		totals[v.name] = &agg{}
 		for _, d := range sets {
-			e := jev.NewEngine(client, jev.Model(""), jev.NewSched(8, false))
+			e := jev.NewEngine(client, model, jev.NewSched(8, false))
+			e.Proto = proto
 			e.MaxQ = v.maxQ
 			e.MaxCost = 0.05
 			items := v.build(d)
